@@ -26,6 +26,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Modified by Ange Olson, Jan 2023 to build out a pandas dataframe from the database 
 """
 
 import os
@@ -40,32 +42,22 @@ def sanitize(tag):
     tag = tag.replace("'","''")
     return tag
 
-
-def die_with_usage():
-    """ HELP MENU """
-    print('demo_tags_db.py')
-    print('  by T. Bertin-Mahieux (2011) tb2332@columbia.edu')
-    print('')
-    print('Shows how to use the SQLite database made from tags')
-    print('in the Last.fm dataset.')
-    print('')
-    print('USAGE:')
-    print('  ./demo_tags_db.py <tags.db>')
-    sys.exit(0)
+def getPath():
+    PATH_ = os.getcwd()
+    for root, dirs, files in os.walk(PATH_):
+    # select file name
+        for file in files:
+            # check the extension of files
+            if file.endswith('.db'):
+                # print whole path of files
+                FILE_ = os.path.join(root, file)
+    return FILE_
 
 
 if __name__ == '__main__':
 
-    if len(sys.argv) != 2:
-        die_with_usage()
-
     # param
-    dbfile = sys.argv[1]
-
-    # sanity check
-    if not os.path.isfile(dbfile):
-        print('ERROR: db file %s does not exist?' % dbfile)
-        die_with_usage()
+    dbfile = 
 
     # open connection
     conn = sqlite3.connect(dbfile)
