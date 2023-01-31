@@ -43,7 +43,13 @@ def sanitize(tag):
     return tag
 
 def getPath():
+    '''
+    see https://www.geeksforgeeks.org/list-all-files-of-certain-type-in-a-directory-using-python/ for implementation
+
+    gets SQL db file path given that the database is in the current working directory 
+    '''
     PATH_ = os.getcwd()
+    FILE_ = ''
     for root, dirs, files in os.walk(PATH_):
     # select file name
         for file in files:
@@ -51,13 +57,14 @@ def getPath():
             if file.endswith('.db'):
                 # print whole path of files
                 FILE_ = os.path.join(root, file)
+    
     return FILE_
 
 
 if __name__ == '__main__':
 
     # param
-    dbfile = 
+    dbfile = getPath()
 
     # open connection
     conn = sqlite3.connect(dbfile)
