@@ -134,6 +134,11 @@ def dataframeLyrics(df):
     return lyrics 
 
 def dataframePipeline(type='train'):
+    '''
+    run through the pipeline based on a defined split
+    :param type: train/test split
+    :return: dataframe
+    '''
     df = getDataframe(type=type)
     df['artist_lookup'] = df['artist'].apply(lambda x: "-".join(x.split(" ")))  # makes artist name URL friendly
     df['title_lookup'] = df['title'].apply(cleanTitle)
