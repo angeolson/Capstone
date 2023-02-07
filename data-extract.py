@@ -1,5 +1,5 @@
 '''
-last update: 1/31
+last update: 2/7
 purpose: create dataframe from .zip file with json data 
 author: Ange Olson 
 
@@ -16,29 +16,46 @@ from urllib.request import Request, urlopen
 
 # set environment vars 
 PATH_ = os.getcwd()
-FILEPATH_ = PATH_ + os.sep + 'lastfm_subset.zip'
+TRAIN_FILEPATH_ = PATH_ + os.sep + 'lastfm_train.zip'
+TEST_FILEPATH_ = PATH_ + os.sep + 'lastfm_test.zip'
 DATAPATH_ = PATH_ + os.sep + 'Data'
+filepath_list = [TRAIN_FILEPATH_, TEST_FILEPATH_]
 
-# extract data from zip file 
-# with zipfile.ZipFile(FILEPATH_, 'r') as zip:
-#     zip.extractall(DATAPATH_)
+# extract data from zip file
+# for file in filepath_list:
+#     with zipfile.ZipFile(file, 'r') as zip:
+#         zip.extractall(DATAPATH_)
 
-# test case for one subfolder:
+def getDataframe(type='train'):
+    '''
+    :param type: either trian or test split
+    :return: pandas dataframe
+    '''
+    filepath = DATAPATH_ + f'/lastfm_{type}'
+    files = os.listdir(filepath)
+    from itertools import product
+    combos = list(product(files, files, files))
+    string_list = []
+    for item in combos:
+        i,j,k = item
+        string = f'/{i}/{j}/{k}/'
+        string_list.append(string)
 
-filepath = DATAPATH_ + '/lastfm_subset/A/A/A/'
-files = os.listdir(filepath)
-df = pd.DataFrame(columns=['artist', 'title', 'tags']) # init df
-for file in files:
-    with open(filepath+file) as json_file:
-        data = json.load(json_file)
-        fields = {}
-        fields['artist'] = data['artist']
-        fields['title'] = data['title']
-        fields['tags'] = ", ".join([item[0] for item in data['tags']])
-        file_df = pd.DataFrame(fields, index=[0])
-        df = pd.concat([df,file_df])
+    df = pd.DataFrame(columns=['artist', 'title', 'tags']) # init df
+    for file in string_list:
+        for subfile in os.listdir(filepath+file):
+            with open(filepath+file+subfile) as json_file:
+                data = json.load(json_file)
+                fields = {}
+                fields['artist'] = data['artist']
+                fields['title'] = data['title']
+                fields['tags'] = ", ".join([item[0] for item in data['tags']])
+                file_df = pd.DataFrame(fields, index=[0])
+                df = pd.concat([df,file_df])
 
-df.reset_index(drop=True)
+    df = df[df['tags'].str.contains('indie')]
+    df.reset_index(drop=True)
+    return df
 
 def cleanTitle(tit):
     '''

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="36bbb333-a04a-4662-8820-67f980a8e51d" name="AWS-Capstone">
+        <fileTransfer accessType="SFTP" host="3.85.118.81" port="22" sshConfigId="83537286-c10f-4458-b092-0f39a08bbef9" sshConfig="ubuntu@3.85.118.81:22 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
