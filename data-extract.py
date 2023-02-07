@@ -26,6 +26,7 @@ filepath_list = [TRAIN_FILEPATH_, TEST_FILEPATH_]
 #     with zipfile.ZipFile(file, 'r') as zip:
 #         zip.extractall(DATAPATH_)
 
+# Helper Functions
 def getDataframe(type='train'):
     '''
     :param type: either trian or test split
@@ -71,12 +72,6 @@ def cleanTitle(tit):
     tit = tit.replace("'","") # remove apostrephes 
     tit = "-".join(tit.split(" ")) # join each word with a dash
     return tit
-
-
-df['artist_lookup'] = df['artist'].apply(lambda x:"-".join(x.split(" "))) # makes artist name URL friendly
-df['title_lookup'] = df['title'].apply(cleanTitle)
-# artist = "-".join(art.split(" "))
-# song = cleanTitle(tit)
 
 def getLyrics(artist,song):
     '''
@@ -138,6 +133,17 @@ def dataframeLyrics(df):
     lyrics = getLyrics(artist, song)
     return lyrics 
 
-df['lyrics'] = df.apply(dataframeLyrics, axis=1)
-df['verses'] = df['lyrics'].apply(getVerses)
-df['verse_types'] = df['lyrics'].apply(getVerseTypes)
+def dataframePipeline(type='train'):
+    df = getDataframe(type=type)
+    df['artist_lookup'] = df['artist'].apply(lambda x: "-".join(x.split(" ")))  # makes artist name URL friendly
+    df['title_lookup'] = df['title'].apply(cleanTitle)
+    df['lyrics'] = df.apply(dataframeLyrics, axis=1)
+    df['verses'] = df['lyrics'].apply(getVerses)
+    df['verse_types'] = df['lyrics'].apply(getVerseTypes)
+    return df
+
+# Run
+
+if __name__ == "__main__":
+    train_df = dataframePipeline(type='train')
+    test_df = dataframePipeline(type='test')
