@@ -13,6 +13,8 @@ import pandas as pd
 import regex as re 
 from bs4 import BeautifulSoup
 from urllib.request import Request, urlopen
+from os import listdir
+from os.path import isfile, join
 
 # set environment vars 
 PATH_ = os.getcwd()
@@ -27,6 +29,7 @@ filepath_list = [TRAIN_FILEPATH_, TEST_FILEPATH_]
 #         zip.extractall(DATAPATH_)
 
 # Helper Functions
+
 def getDataframe(type='train'):
     '''
     :param type: either trian or test split
@@ -44,17 +47,19 @@ def getDataframe(type='train'):
 
     df = pd.DataFrame(columns=['artist', 'title', 'tags']) # init df
     for file in string_list:
-        for subfile in os.listdir(filepath+file):
-            with open(filepath+file+subfile) as json_file:
-                data = json.load(json_file)
-                fields = {}
-                fields['artist'] = data['artist']
-                fields['title'] = data['title']
-                fields['tags'] = ", ".join([item[0] for item in data['tags']])
-                file_df = pd.DataFrame(fields, index=[0])
-                df = pd.concat([df,file_df])
+        if os.path.exists(filepath+file):
+            for subfile in os.listdir(filepath+file):
+                with open(filepath+file+subfile) as json_file:
+                    data = json.load(json_file)
+                    fields = {}
+                    fields['artist'] = data['artist']
+                    fields['title'] = data['title']
+                    fields['tags'] = ", ".join([item[0] for item in data['tags']])
+                    if 'indie' in fields['tags']:
+                        file_df = pd.DataFrame(fields, index=[0])
+                        df = pd.concat([df,file_df])
 
-    df = df[df['tags'].str.contains('indie')]
+    #df = df[df['tags'].str.contains('indie')]
     df.reset_index(drop=True)
     return df
 
@@ -140,15 +145,20 @@ def dataframePipeline(type='train'):
     :return: dataframe
     '''
     df = getDataframe(type=type)
+    print('dataframe!')
+    print(df.head())
     df['artist_lookup'] = df['artist'].apply(lambda x: "-".join(x.split(" ")))  # makes artist name URL friendly
     df['title_lookup'] = df['title'].apply(cleanTitle)
     df['lyrics'] = df.apply(dataframeLyrics, axis=1)
+    print('lyrics!')
     df['verses'] = df['lyrics'].apply(getVerses)
     df['verse_types'] = df['lyrics'].apply(getVerseTypes)
+    print('done!')
+    print(df.size)
     return df
 
 # Run
 
 if __name__ == "__main__":
-    train_df = dataframePipeline(type='train')
     test_df = dataframePipeline(type='test')
+    test_df.to_csv('test_df.csv')
