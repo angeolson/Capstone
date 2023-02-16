@@ -1,5 +1,7 @@
+# imports
 import pandas as pd
 
+# init df
 df = pd.DataFrame()
 
 # loop through all files
@@ -11,11 +13,11 @@ for dataframe in ['train_df_chunk_one.csv', 'train_df_chunk_two.csv', 'train_df_
 # see how many have non-blank verses
 df = df[df['lyrics'] != 'song not found']
 
-# 10029 lyrics instances
+# 10029 lyrics instances; export
 df.to_csv('data.csv')
 
 df['verse_num'] = df['verse_types'].apply(lambda x:len(x))
 df_delin_verses = df[ df['verse_num'] > 2]
 
-# 3658 contain separated out verses, chorus
+# 3658 contain separated out verses, chorus; export
 df_delin_verses = df.to_csv('data_delineated.csv')
