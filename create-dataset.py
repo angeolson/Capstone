@@ -20,4 +20,4 @@ df['verse_num'] = df['verse_types'].apply(lambda x:len(x))
 df_delin_verses = df[ df['verse_num'] > 2]
 
 # 3658 contain separated out verses, chorus; export
-df_delin_verses = df.to_csv('data_delineated.csv')
+df_delin_verses.to_csv('data_delineated.csv')
