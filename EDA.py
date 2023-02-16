@@ -15,10 +15,26 @@ def cleanData(df):
     df = df[['artist', 'title', 'verses', 'verse_types']]
     return df
 
+def removeX(item):
+    if item is None:
+        return item
+    if item.lower() == 'x':
+        return ''
+def concatType(item, type='chorus'):
+    if item is None:
+        return item
+    if item.startswith(type):
+        return type
+
+typelist = ['verse', 'chorus', 'prechorus', 'bridge', 'outro', 'intro', 'refrain', 'hook']
 def verseTypeCleaner(verse_type):
-    new_types = [item.split(':')[0] for item in verse_type]
-    new_types = [re.sub(r'[^A-Za-z\s]', '', item) for item in new_types]
-    new_types = [item.strip() for item in new_types]
+    new_types = [item.split(':')[0] for item in verse_type] # only keep verse title before [:]
+    new_types = [re.sub(r'[^A-Za-z\s]', '', item) for item in new_types] # remove numbers, punctuation
+    new_types = [item.strip() for item in new_types] # remove trailing/leading whitespace
+    new_types = [item.lower() for item in new_types]
+    new_types = [removeX(item) for item in new_types]
+    for t in typelist:
+        new_types = [concatType(item, type=t) for item in new_types]
     return new_types
 
 # read in data
@@ -38,9 +54,8 @@ df.verse_types.explode().dropna().value_counts().reset_index().to_csv('verse_typ
 
 # To do:
 # replace x with blank
-# turn 'Intrumental...' into 'Intstrumental'
+# want anything that's not chorus, verse, prechorus, bridge, outro, intro, refrain, hook to be blank
 # turn Chorus x into Chorus
-# want Guitar Solo = Guitar solo = guitar solo
 # want Chorus I = Chorus II = Chorus
 # want verse = VERSE = Verse
 # remove non-english songs from frame
