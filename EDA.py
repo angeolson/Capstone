@@ -150,10 +150,20 @@ df['verse_types'] = df['verse_types'].apply(verseTypeCleaner)
 # os.system('pip3 install markupsafe==2.0.1') # last compatible version of markupsafe to use with language detector
 
 
-test = df.iloc[0]
-len(test.verses)
-len(test.verse_types)
 
+test = df.iloc[0]
+
+
+# this loop adds whitespace after punctuation, removes instances of doublewhitespace
+pat = re.compile(r"([.()!?,:;/-])")
+sentence_list = [sentence for verse in test.verses for sentence in verse]
+for sentence in sentence_list:
+    new_sentence = pat.sub(" \\1 ", sentence)
+    new_sentence = re.sub(r'\s+', ' ', new_sentence)
+    print(new_sentence)
+
+
+# this loop inserts special tokens and creates a list for each verse
 for i in range(len(test.verses)):
     list_ = []
     list_.append(typedict[test.verse_types[i]])
