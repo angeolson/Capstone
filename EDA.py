@@ -2,6 +2,19 @@
 import pandas as pd
 import regex as re
 
+# init dict of verse types to keep
+typedict = {'verse': 1,
+            'chorus': 2,
+            'pre chorus': 3,
+            'bridge': 4,
+            'outro': 5,
+            'intro': 6,
+            'refrain': 7,
+            'hook': 8,
+            'instrumental': 9,
+            'post chorus': 10
+}
+
 # helper functions
 def cleanData(df):
     '''
@@ -18,23 +31,34 @@ def cleanData(df):
 def removeX(item):
     if item is None:
         return item
-    if item.lower() == 'x':
+    elif item.lower() == 'x':
         return ''
+    else:
+        return item
 def concatType(item, type='chorus'):
     if item is None:
         return item
-    if item.startswith(type):
+    elif item.startswith(type):
         return type
+    else:
+        return item
 
-typelist = ['verse', 'chorus', 'prechorus', 'bridge', 'outro', 'intro', 'refrain', 'hook']
+def keepTypes(item):
+    if item in typedict.keys():
+        return item
+    else:
+        return ''
+
 def verseTypeCleaner(verse_type):
     new_types = [item.split(':')[0] for item in verse_type] # only keep verse title before [:]
-    new_types = [re.sub(r'[^A-Za-z\s]', '', item) for item in new_types] # remove numbers, punctuation
+    new_types = [re.sub(r'[\d\[\].!?\\]', '', item) for item in new_types] # remove numbers, punctuation exept -
+    new_types = [re.sub(r'\-', ' ', item) for item in new_types]
     new_types = [item.strip() for item in new_types] # remove trailing/leading whitespace
     new_types = [item.lower() for item in new_types]
     new_types = [removeX(item) for item in new_types]
-    for t in typelist:
+    for t in typedict.keys():
         new_types = [concatType(item, type=t) for item in new_types]
+    new_types = [keepTypes(item) for item in new_types]
     return new_types
 
 # read in data
@@ -49,8 +73,11 @@ print(df.verse_types.explode().dropna().value_counts())
 # a lot of verse names seem to have extra information after the colon, or the '[' and ']' is missing and causing duplicates. We also probably don't need verse numbers.
 df['verse_types'] = df['verse_types'].apply(verseTypeCleaner)
 
+print(df.verse_types.explode().dropna().value_counts())
+
 # observe as .csv file
-df.verse_types.explode().dropna().value_counts().reset_index().to_csv('verse_types.csv')
+# df.verse_types.explode().dropna().value_counts().reset_index().to_csv('verse_types.csv')
+
 
 # To do:
 # replace x with blank
