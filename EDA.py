@@ -113,3 +113,11 @@ ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 plt.show()
+
+#6: unigrams
+
+#7: bigrams
+
+#8: trigrams
+
+#9: rhyme distribution 
