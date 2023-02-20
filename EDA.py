@@ -1,10 +1,14 @@
 # imports
 import pandas as pd
+import seaborn as sns
+import numpy as np
+import matplotlib.pyplot as plt
+sns.set_theme(style="whitegrid")
+from collections import Counter
 import regex as re
-import spacy
-from spacy.language import Language
-from spacy_langdetect import LanguageDetector
-# os.system('pip3 install markupsafe==2.0.1') # last compatible version of markupsafe to use with language detector
+import nltk
+#nltk.download('stopwords')
+from nltk.corpus import stopwords
 
 # helper functions
 def cleanData(df):
@@ -13,155 +17,99 @@ def cleanData(df):
     :param df:
     :return: cleaned pandas dataframe
     '''
-    df = df.iloc[: , 1:] # remove uneeded index column
-    df['verses'] = df['verses'].apply(lambda x:eval(x, {'__builtins__': None}, {}))
-    df['verse_types'] = df['verse_types'].apply(lambda x: eval(x, {'__builtins__': None}, {}))
-    df = df[['artist', 'title', 'verses', 'verse_types']]
-    df = VerseCleaner(df)
-    return df
-
-def removeX(item):
-    '''
-    function removes 'x' from verse type
-
-    :param item: string
-    :return: item without 'x'
-    '''
-    if item is None:
-        return item
-    elif item.lower() == 'x':
-        return ''
-    else:
-        return item
-def concatType(item, type='chorus'):
-    '''
-    function removes words that come after the specified verse type to get it down to its 'root type'
-
-    :param item: string
-    :param type: string
-    :return: item where item == type or None
-    '''
-    if item is None:
-        return item
-    elif item.startswith(type):
-        return type
-    else:
-        return item
-
-def keepTypes(item):
-    '''
-    function limits the different type names kept in the dataframe
-
-    :param item: string
-    :return: item in list typedict.keys()
-    '''
-    if item in typedict.keys():
-        return item
-    else:
-        return 'other'
-
-def verseTypeCleaner(verse_type):
-    '''
-    this function splits any verse type at the ':' delimeter and keeps the first hald, removes numbers and select punctuation,
-    removes trailing/leading whitespace, lowercases words, gets verse types down to their root (e.g. "chorus" instead of "chorus repeated"),
-    and removes the 'x' label. Lastly, this function removes types that are uncommon and replaces them with blank space.
-
-    :param verse_type:
-    :return: cleaned verse type list
-    '''
-    new_types = [item.split(':')[0] for item in verse_type] # only keep verse title before [:]
-    new_types = [re.sub(r'[\d\[\].!?\\]', '', item) for item in new_types] # remove numbers, punctuation exept -
-    new_types = [re.sub(r'\-', ' ', item) for item in new_types]
-    new_types = [item.strip() for item in new_types] # remove trailing/leading whitespace
-    new_types = [item.lower() for item in new_types]
-    new_types = [removeX(item) for item in new_types]
-    for t in typedict.keys():
-        new_types = [concatType(item, type=t) for item in new_types]
-    new_types = [keepTypes(item) for item in new_types]
-    return new_types
-
-def get_lang_detector(nlp, name):
-    return LanguageDetector()
-
-def isEnglish(song):
-    '''
-    determines if a song is englihs using spacy english model
-
-    :param song: verse column of dataframe
-    :return: boolean if the song is english or not
-    '''
-    sentence_list = [sentence for verse in song for sentence in verse]
-    text = " ".join(sentence_list)
-    doc = nlp(text)
-    detect_language = doc._.language
-    if detect_language['language'] == 'en':
-        return 'Yes'
-    else:
-        return 'No'
-
-def VerseCleaner(df):
-    '''
-    cleans the verses and verse types of the dataframe; removes songs that are not english
-
-    :param df: pandas dataframe
-    :return: df
-    '''
-    df['verse_types'] = df['verse_types'].apply(verseTypeCleaner)
-    df['english'] = df['verses'].apply(isEnglish)
-    df = df[ df['english'] == 'Yes']
-    df['verses_transformed'] = df.apply(versesTransform, axis=1)
+    for col in ['verses', 'verse_types', 'verses_transformed']:
+        df[col] = df[col].apply(lambda x:eval(x, {'__builtins__': None}, {}))
+    df['EDA_verses'] = df['verses'].apply(versesTransform)
     return df
 
 def sentencePipe(sent):
     pat = re.compile(r"([.()!?,:;/-])")
     new_sentence = pat.sub(" \\1 ", sent)
     new_sentence = re.sub(r'\s+', ' ', new_sentence)
-    new_sentence = '<NEWLINE> ' + new_sentence
     return new_sentence.split(" ")
 
-def versesTransform(df):
+def versesTransform(verses):
     full_list = []
-    if len(df.verses) == len(df.verse_types):
-        for i in range(len(df.verses)):
-            list_ = []
-            list_.append(typedict[df.verse_types[i]])
-            sentence_list = [word for sentence in df.verses[i] for word in sentencePipe(sentence)]
-            [list_.append(word) for word in sentence_list]
-            full_list.append(list_)
-        return [word for sentence in full_list for word in sentence]
-    else:
-        return 'Lengths are not equal'
+    for verse in verses:
+        sentence_list = [word for sentence in verse for word in sentencePipe(sentence)]
+        [full_list.append(word) for word in sentence_list]
+    return full_list
 
-# init dict of verse types to keep
-typedict = {'verse': '<VERSE>',
-            'chorus': '<CHORUS>',
-            'pre chorus': '<PRECHORUS>',
-            'bridge': '<BRIDGE>',
-            'outro': '<OUTRO>',
-            'intro': '<INTRO>',
-            'refrain': '<REFRAIN>',
-            'hook': '<HOOK>',
-            'instrumental': '<INSTRUMENTAL>',
-            'post chorus': '<POSTCHORUS>',
-            'other': '<OTHER>'
-}
+def wordCount(verses):
+    verse_counter = Counter([item.lower() for item in verses])
+    verse_words = len(verse_counter)
+    return verse_words
 
-# init spacy
-nlp = spacy.load("en_core_web_sm")
-Language.factory("language_detector", func=get_lang_detector)
-nlp.add_pipe('language_detector', last=True)
-
-# read in data
-df = pd.read_csv('data_delineated.csv')
-
-# cleaning pipeline for dataframe
+# clean df
+df = pd.read_csv('df_cleaned.csv', index_col=0)
 df = cleanData(df)
-print('Done!')
-df.to_csv('df_cleaned.csv')
+
+# create stats:
+
+# 1: verse type counts
+x = [item.capitalize() for item in df['verse_types'].explode().value_counts().index]
+y = df['verse_types'].explode().value_counts()
+ax = sns.barplot(x=x, y=y)
+sns.set(rc={"figure.figsize":(6, 7)})
+ax.set(title='Song Component Occurences')
+ax.set_ylabel('')
+ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right")
+ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+plt.show()
+
+# 2: word count histogram
+df['word_count'] = df['EDA_verses'].apply(wordCount)
+ax = sns.histplot(data=df, x='word_count')
+ax.set_ylabel('')
+ax.set_xlabel('Word Count')
+ax.set(title='Song Unique Word Count Distribution')
+plt.show()
+
+# 3: length histogram
+df['length'] = df['EDA_verses'].apply(lambda x:len(x))
+ax = sns.histplot(data=df, x='length', kde=True)
+ax.set_ylabel('')
+ax.set_xlabel('Length')
+ax.set(title='Song Length Distribution')
+plt.show()
+
+# 4: for fun, both plotted together as a scatter histogram
+ax = sns.histplot(
+    df, x="length", y="word_count",
+    bins=50, discrete=(False, False), log_scale=(False, False),
+    cbar=True, cbar_kws=dict(shrink=.75)
+)
+ax.set_ylabel('Word Count')
+ax.set_xlabel('Length')
+ax.set(title='Song Length and Word Count Distribution')
+plt.show()
+
+# 5: most common words, with and without stop words
+punctuation = ['?', '!', '-', ',', '.', '(', ')', '']
+stop_words = stopwords.words('english') + punctuation
+
+# with stop words
+top_words = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in punctuation])
+
+x = [item[0] for item in top_words.most_common(20)]
+y = [item[1] for item in top_words.most_common(20)]
+ax = sns.barplot(x=x, y=y)
+sns.set(rc={"figure.figsize":(6, 7)})
+ax.set(title='20 Most Common Words')
+ax.set_ylabel('')
+ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+plt.show()
 
 
-
-
-
-
-
+# without stop words
+top_words_rem = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in stop_words])
+x = [item[0] for item in top_words_rem.most_common(20)]
+y = [item[1] for item in top_words_rem.most_common(20)]
+ax = sns.barplot(x=x, y=y)
+sns.set(rc={"figure.figsize":(6, 7)})
+ax.set(title='20 Most Common Words (Stopwords Removed')
+ax.set_ylabel('')
+ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+plt.show()

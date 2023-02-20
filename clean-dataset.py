@@ -78,6 +78,7 @@ def verseTypeCleaner(verse_type):
     for t in typedict.keys():
         new_types = [concatType(item, type=t) for item in new_types]
     new_types = [keepTypes(item) for item in new_types]
+    new_types = [item for item in new_types if item != 'instrumental']
     return new_types
 
 def get_lang_detector(nlp, name):
@@ -141,7 +142,7 @@ typedict = {'verse': '<VERSE>',
             'intro': '<INTRO>',
             'refrain': '<REFRAIN>',
             'hook': '<HOOK>',
-            'instrumental': '<INSTRUMENTAL>',
+            # 'instrumental': '<INSTRUMENTAL>',
             'post chorus': '<POSTCHORUS>',
             'other': '<OTHER>'
 }
@@ -157,6 +158,7 @@ df = pd.read_csv('data_delineated.csv')
 # cleaning pipeline for dataframe
 df = cleanData(df)
 print('Done!')
+df = df[df['verses_transformed'] != 'Lengths are not equal']
 df.to_csv('df_cleaned.csv')
 
 
