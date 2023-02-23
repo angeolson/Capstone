@@ -1,14 +1,13 @@
 # imports
 import pandas as pd
 import seaborn as sns
-import numpy as np
 import matplotlib.pyplot as plt
 sns.set_theme(style="whitegrid")
 from collections import Counter
 import regex as re
 import nltk
 #nltk.download('stopwords')
-nltk.download('cmudict')
+#nltk.download('cmudict')
 from nltk.corpus import stopwords
 from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
@@ -26,12 +25,22 @@ def cleanData(df):
     return df
 
 def sentencePipe(sent):
+    '''
+    pipeline for lines. removes select punctuation and excess whitespace, tokenizes by word (space)
+    :param sent: line
+    :return: word tokenized line
+    '''
     pat = re.compile(r"([.()!?,:;/-])")
     new_sentence = pat.sub(" \\1 ", sent)
     new_sentence = re.sub(r'\s+', ' ', new_sentence)
     return new_sentence.split(" ")
 
 def versesTransform(verses):
+    '''
+    runs each line of a verse through the pipeline, then appends each word individually to one phrase per song
+    :param verses:
+    :return: one phrase per song
+    '''
     full_list = []
     for verse in verses:
         sentence_list = [word for sentence in verse for word in sentencePipe(sentence)]
@@ -39,6 +48,11 @@ def versesTransform(verses):
     return full_list
 
 def wordCount(verses):
+    '''
+    word count for a song (unique words)
+    :param verses: single phrase verse
+    :return: length Counter dict for a song
+    '''
     verse_counter = Counter([item.lower() for item in verses])
     verse_words = len(verse_counter)
     return verse_words
@@ -84,6 +98,11 @@ def doTheyRhyme(word1, word2, level=3):
     return word1 in rhyme(word2, level)
 
 def versesRhymeTransform(verses_transformed):
+    '''
+    splits a verse line by line while removing excess space, punctuation, for use in determining rhyme structure
+    :param verses_transformed: 'verses_transformed' column of dataframe
+    :return: song split line by line, not by verses.
+    '''
     typedict = {'verse': '<VERSE>',
                 'chorus': '<CHORUS>',
                 'pre chorus': '<PRECHORUS>',
@@ -100,13 +119,27 @@ def versesRhymeTransform(verses_transformed):
     result = split_list([item for item in result if item not in punctuation_spaces],'<NEWLINE>')
     return result
 
-def getSongRhyme(verses_transformed, level):
+def getSongRhyme(verses_transformed, level, option='AA'):
+    '''
+    gets the rhyme score of a song by comparing the last words of each line to the line proceeding it (when available).
+    Divides the total number of rhymes by the total number of possible rhymes, returning a score between 0 (no rhymes) and 1 (either follows AA BB .. pattern perfectly or ABAB pattern perfectly)
+    :param verses_transformed:
+    :param level:
+    :return:
+    '''
     verses = [item[-1] for item in versesRhymeTransform(verses_transformed)]
-    max_rhymes = len(verses) - 1
-    list_ = []
-    for i in range(1, len(verses)):
-        list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
-    return sum(list_)/max_rhymes
+    if option == 'AA':
+        max_rhymes = len(verses) - 1
+        list_ = []
+        for i in range(1, len(verses)):
+            list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
+        return sum(list_)/max_rhymes
+    else:
+        max_rhymes = (len(verses)/2) - 1
+        list_ = []
+        for i in range(2, len(verses)):
+            list_.append(doTheyRhyme(verses[i-2], verses[i], level=level))
+        return sum(list_)/max_rhymes
 
 def split_list(input_list,seperator):
     '''
@@ -172,7 +205,7 @@ ax.set_xlabel('Length')
 ax.set(title='Song Length and Word Count Distribution')
 plt.show()
 
-# 5: most common words, with and without stop words
+# 5: most common words, with and without stop words (unigrams)
 punctuation = ['?', '!', '-', ',', '.', '(', ')', '']
 stop_words = stopwords.words('english') + punctuation
 
@@ -218,24 +251,33 @@ ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 plt.show()
 
 #8: trigrams
-trigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 3)
-x = []
-y = []
-for word, freq in trigrams:
-    x.append(word), y.append(freq)
-ax = sns.barplot(x=x, y=y)
-sns.set(rc={"figure.figsize":(6, 7)})
-ax.set(title='20 Most Common Trigrams')
-ax.set_ylabel('')
-ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-plt.show()
+# trigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 3)
+# x = []
+# y = []
+# for word, freq in trigrams:
+#     x.append(word), y.append(freq)
+# ax = sns.barplot(x=x, y=y)
+# sns.set(rc={"figure.figsize":(6, 7)})
+# ax.set(title='20 Most Common Trigrams')
+# ax.set_ylabel('')
+# ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+# ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+# plt.show()
 
 #9: rhyme distribution
 
+df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
+df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
+print('done!')
 
+ax = sns.histplot(data=df, x='rhymescore_AA', kde=True)
+ax.set_ylabel('')
+ax.set_xlabel('Length')
+ax.set(title='Song Rhyme Score Distribution')
+plt.show()
 
-
-getSongRhyme(verses_transformed=, level=)
-
-
+ax = sns.histplot(data=df, x='rhymescore_AB', kde=True)
+ax.set_ylabel('')
+ax.set_xlabel('Length')
+ax.set(title='Song Rhyme Score Distribution')
+plt.show()
