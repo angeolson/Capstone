@@ -9,6 +9,7 @@ import regex as re
 import nltk
 #nltk.download('stopwords')
 from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import CountVectorizer
 
 # helper functions
 def cleanData(df):
@@ -39,6 +40,21 @@ def wordCount(verses):
     verse_counter = Counter([item.lower() for item in verses])
     verse_words = len(verse_counter)
     return verse_words
+
+def get_top_n_ngram(corpus, n=None, ngram=1):
+    '''
+    adapted from https://towardsdatascience.com/a-complete-exploratory-data-analysis-and-visualization-for-text-data-29fb1b96fb6a
+    :param corpus:
+    :param n:
+    :param ngram:
+    :return:
+    '''
+    vec = CountVectorizer(ngram_range=(ngram, ngram)).fit(corpus)
+    bag_of_words = vec.transform(corpus)
+    sum_words = bag_of_words.sum(axis=0)
+    words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
+    words_freq =sorted(words_freq, key = lambda x: x[1], reverse=True)
+    return words_freq[:n]
 
 # clean df
 df = pd.read_csv('df_cleaned.csv', index_col=0)
@@ -108,16 +124,39 @@ x = [item[0] for item in top_words_rem.most_common(20)]
 y = [item[1] for item in top_words_rem.most_common(20)]
 ax = sns.barplot(x=x, y=y)
 sns.set(rc={"figure.figsize":(6, 7)})
-ax.set(title='20 Most Common Words (Stopwords Removed')
+ax.set(title='20 Most Common Words (Stopwords Removed)')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 plt.show()
 
-#6: unigrams
 
 #7: bigrams
+bigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 2)
+x = []
+y = []
+for word, freq in bigrams:
+    x.append(word), y.append(freq)
+ax = sns.barplot(x=x, y=y)
+sns.set(rc={"figure.figsize":(6, 7)})
+ax.set(title='20 Most Common Bigrams')
+ax.set_ylabel('')
+ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+plt.show()
 
 #8: trigrams
+trigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 3)
+x = []
+y = []
+for word, freq in trigrams:
+    x.append(word), y.append(freq)
+ax = sns.barplot(x=x, y=y)
+sns.set(rc={"figure.figsize":(6, 7)})
+ax.set(title='20 Most Common Trigrams')
+ax.set_ylabel('')
+ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+plt.show()
 
 #9: rhyme distribution 

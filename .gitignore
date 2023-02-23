@@ -131,3 +131,4 @@ dmypy.json
 *.icloud
 *.json
 .DS_Store
+*.xml
