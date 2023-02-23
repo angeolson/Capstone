@@ -8,7 +8,9 @@ from collections import Counter
 import regex as re
 import nltk
 #nltk.download('stopwords')
+nltk.download('cmudict')
 from nltk.corpus import stopwords
+from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
 
 # helper functions
@@ -45,9 +47,9 @@ def get_top_n_ngram(corpus, n=None, ngram=1):
     '''
     adapted from https://towardsdatascience.com/a-complete-exploratory-data-analysis-and-visualization-for-text-data-29fb1b96fb6a
     :param corpus:
-    :param n:
-    :param ngram:
-    :return:
+    :param n: int, how many words to return
+    :param ngram: int, how long of an ngram to search for. Default = 1
+    :return: tuple of ngrams and frequencies
     '''
     vec = CountVectorizer(ngram_range=(ngram, ngram)).fit(corpus)
     bag_of_words = vec.transform(corpus)
@@ -55,6 +57,76 @@ def get_top_n_ngram(corpus, n=None, ngram=1):
     words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
     words_freq =sorted(words_freq, key = lambda x: x[1], reverse=True)
     return words_freq[:n]
+
+
+def rhyme(inp, level):
+    '''
+    adapted from https://stackoverflow.com/questions/25714531/find-rhyme-using-nltk-in-python
+    :param inp:
+    :param level:
+    :return:
+    '''
+    entries = cmudict.entries()
+    syllables = [(word, syl) for word, syl in entries if word == inp]
+    rhymes = []
+    for (word, syllable) in syllables:
+        rhymes += [word for word, pron in entries if pron[-level:] == syllable[-level:]]
+    return set(rhymes)
+
+def doTheyRhyme(word1, word2, level=3):
+    '''
+    adapted from https://stackoverflow.com/questions/25714531/find-rhyme-using-nltk-in-python
+    :param word1: string
+    :param word2: string
+    :param level: nltk rhyme level, default is 3 (includes slant rhymes)
+    :return: boolean
+    '''
+    return word1 in rhyme(word2, level)
+
+def versesRhymeTransform(verses_transformed):
+    typedict = {'verse': '<VERSE>',
+                'chorus': '<CHORUS>',
+                'pre chorus': '<PRECHORUS>',
+                'bridge': '<BRIDGE>',
+                'outro': '<OUTRO>',
+                'intro': '<INTRO>',
+                'refrain': '<REFRAIN>',
+                'hook': '<HOOK>',
+                'post chorus': '<POSTCHORUS>',
+                'other': '<OTHER>'
+                }
+    punctuation_spaces = ['(', '[', '.', '(', ')', '!', '?', ',', ':', ';', '/', '-', ']', ')', ' ', '']
+    result = [item for item in verses_transformed if item not in typedict.values()]
+    result = split_list([item for item in result if item not in punctuation_spaces],'<NEWLINE>')
+    return result
+
+def getSongRhyme(verses_transformed, level):
+    verses = [item[-1] for item in versesRhymeTransform(verses_transformed)]
+    max_rhymes = len(verses) - 1
+    list_ = []
+    for i in range(1, len(verses)):
+        list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
+    return sum(list_)/max_rhymes
+
+def split_list(input_list,seperator):
+    '''
+    taken from https://stackoverflow.com/questions/30538436/how-to-to-split-a-list-at-a-certain-value
+    :param input_list:
+    :param seperator:
+    :return:
+    '''
+    outer = []
+    inner = []
+    for elem in input_list:
+        if elem == seperator:
+            if inner:
+                outer.append(inner)
+            inner = []
+        else:
+            inner.append(elem)
+    if inner:
+        outer.append(inner)
+    return outer
 
 # clean df
 df = pd.read_csv('df_cleaned.csv', index_col=0)
@@ -159,4 +231,11 @@ ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 plt.show()
 
-#9: rhyme distribution 
+#9: rhyme distribution
+
+
+
+
+getSongRhyme(verses_transformed=, level=)
+
+
