@@ -264,6 +264,9 @@ plt.show()
 # ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 # plt.show()
 
+# export df
+df.to_csv('df_EDA.csv')
+
 #9: rhyme distribution
 
 df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
