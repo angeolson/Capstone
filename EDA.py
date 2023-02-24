@@ -170,31 +170,39 @@ df = cleanData(df)
 # 1: verse type counts
 x = [item.capitalize() for item in df['verse_types'].explode().value_counts().index]
 y = df['verse_types'].explode().value_counts()
+
+fig = plt.figure()
 ax = sns.barplot(x=x, y=y)
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='Song Component Occurences')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+fig.savefig('Song_Component_Occurences.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 # 2: word count histogram
 df['word_count'] = df['EDA_verses'].apply(wordCount)
+fig = plt.figure()
 ax = sns.histplot(data=df, x='word_count')
 ax.set_ylabel('')
 ax.set_xlabel('Word Count')
 ax.set(title='Song Unique Word Count Distribution')
+fig.savefig('Song_Unique_Word_Count_Distribution.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 # 3: length histogram
 df['length'] = df['EDA_verses'].apply(lambda x:len(x))
+fig = plt.figure()
 ax = sns.histplot(data=df, x='length', kde=True)
 ax.set_ylabel('')
 ax.set_xlabel('Length')
 ax.set(title='Song Length Distribution')
+fig.savefig('Song_Length_Distribution.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 # 4: for fun, both plotted together as a scatter histogram
+fig = plt.figure()
 ax = sns.histplot(
     df, x="length", y="word_count",
     bins=50, discrete=(False, False), log_scale=(False, False),
@@ -203,6 +211,7 @@ ax = sns.histplot(
 ax.set_ylabel('Word Count')
 ax.set_xlabel('Length')
 ax.set(title='Song Length and Word Count Distribution')
+fig.savefig('Song_Length_and_Word_Count_Distribution.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 # 5: most common words, with and without stop words (unigrams)
@@ -214,12 +223,14 @@ top_words = Counter([item.lower() for item in df['EDA_verses'].explode() if item
 
 x = [item[0] for item in top_words.most_common(20)]
 y = [item[1] for item in top_words.most_common(20)]
+fig = plt.figure()
 ax = sns.barplot(x=x, y=y)
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='20 Most Common Words')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+fig.savefig('20_Most_Common_Words.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 
@@ -227,12 +238,14 @@ plt.show()
 top_words_rem = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in stop_words])
 x = [item[0] for item in top_words_rem.most_common(20)]
 y = [item[1] for item in top_words_rem.most_common(20)]
+fig = plt.figure()
 ax = sns.barplot(x=x, y=y)
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='20 Most Common Words (Stopwords Removed)')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+fig.savefig('20_Most_Common_Words_No_Stopwords.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 
@@ -242,12 +255,14 @@ x = []
 y = []
 for word, freq in bigrams:
     x.append(word), y.append(freq)
+fig = plt.figure()
 ax = sns.barplot(x=x, y=y)
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='20 Most Common Bigrams')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+fig.savefig('20_Most_Common_Bigrams.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
 #8: trigrams
@@ -273,14 +288,18 @@ df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'
 df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
 print('done!')
 
+fig = plt.figure()
 ax = sns.histplot(data=df, x='rhymescore_AA', kde=True)
 ax.set_ylabel('')
 ax.set_xlabel('Length')
-ax.set(title='Song Rhyme Score Distribution')
+ax.set(title='Song AA Rhyme Score Distribution')
+fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
 plt.show()
 
+fig = plt.figure()
 ax = sns.histplot(data=df, x='rhymescore_AB', kde=True)
 ax.set_ylabel('')
 ax.set_xlabel('Length')
-ax.set(title='Song Rhyme Score Distribution')
+ax.set(title='Song AB Rhyme Score Distribution')
+fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
 plt.show()
