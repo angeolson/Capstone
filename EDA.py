@@ -11,6 +11,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
+import os
 
 # helper functions
 def cleanData(df):
@@ -161,10 +162,15 @@ def split_list(input_list,seperator):
         outer.append(inner)
     return outer
 
+# vars
+DATAPATH = '/home/ubuntu/Capstone/'
+IMGPATH = '/home/ubuntu/Capstone/Plots'
+
 # clean df
+os.chdir(DATAPATH)
 df = pd.read_csv('df_cleaned.csv', index_col=0)
 df = cleanData(df)
-
+os.chdir(IMGPATH)
 # create stats:
 
 # 1: verse type counts
@@ -279,9 +285,6 @@ plt.show()
 # ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 # plt.show()
 
-# export df
-df.to_csv('df_EDA.csv')
-
 #9: rhyme distribution
 
 df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
@@ -303,3 +306,7 @@ ax.set_xlabel('Length')
 ax.set(title='Song AB Rhyme Score Distribution')
 fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
 plt.show()
+
+# export df
+os.chdir(DATAPATH)
+df.to_csv('df_EDA.csv')
