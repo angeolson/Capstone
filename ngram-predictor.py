@@ -5,8 +5,10 @@ procedure and select helper functions adapted from https://towardsdatascience.co
 
 # imports
 import pandas as pd
-import time
+import string
 import random
+import time
+from typing import List
 
 def cleanData(df):
     '''
@@ -17,6 +19,7 @@ def cleanData(df):
     for col in ['verses', 'verse_types', 'verses_transformed', 'EDA_verses']:
         df[col] = df[col].apply(lambda x:eval(x, {'__builtins__': None}, {}))
     return df
+
 
 def get_ngrams(n: int, tokens: list) -> list:
     """
@@ -47,7 +50,7 @@ class NgramModel(object):
         :param sentence: input text
         """
         n = self.n
-        ngrams = get_ngrams(n, tokenize(sentence))
+        ngrams = get_ngrams(n, sentence)
         for ngram in ngrams:
             if ngram in self.ngram_counter:
                 self.ngram_counter[ngram] += 1.0
@@ -78,20 +81,25 @@ class NgramModel(object):
             if summ > r:
                 return token
 
-    def generate_text(self, token_count: int):
+    def generate_text(self, token_count: int, start_option: str):
         """
         :param token_count: number of words to be produced
+        :param option: either 'random' or a starting prompt word
         :return: generated text
         """
         n = self.n
-        context_queue = (n - 1) * ['<START>']
-        result = []
+        if start_option == 'random':
+            context_queue = (n - 1) * ['<START>']
+            result = []
+        else:
+            context_queue = (n - 1) * [start_option]
+            result = [start_option]
         for _ in range(token_count):
             obj = self.random_token(tuple(context_queue))
             result.append(obj)
             if n > 1:
                 context_queue.pop(0)
-                if obj == '.':
+                if obj == '<NEWLINE>':
                     context_queue = (n - 1) * ['<START>']
                 else:
                     context_queue.append(obj)
@@ -112,19 +120,75 @@ class NgramModel(object):
         return result
 
 
-def create_ngram_model(n, path):
+def create_ngram_model(n, song):
     m = NgramModel(n)
-    with open(path, 'r') as f:
-        text = f.read()
-        text = text.split('.')
-        for sentence in text:
-            # add back the fullstop
-            sentence += '.'
+    for sentence in song:
+        m.update(sentence)
+    return m
+
+def create_ngram_model_from_df(df, n):
+    m = NgramModel(n)
+    for i in range(len(df)):
+        song = df['verses_transformed'][i]
+        song_transformed = versesTransform(song)
+        for sentence in song_transformed:
             m.update(sentence)
     return m
 
 # load data
 df = pd.read_csv('df_EDA.csv', index_col=0)
 df = cleanData(df)
+df.reset_index(drop=True, inplace=True)
+
+# clean verses_transformed column, which will be used to generate text
+
+def split_list(input_list,seperator):
+    '''
+    taken from https://stackoverflow.com/questions/30538436/how-to-to-split-a-list-at-a-certain-value
+    :param input_list:
+    :param seperator:
+    :return:
+    '''
+    outer = []
+    inner = []
+    for elem in input_list:
+        if elem == seperator:
+            if inner:
+                outer.append(inner)
+            inner = []
+        else:
+            inner.append(elem)
+    if inner:
+        outer.append(inner)
+
+    return outer
+def versesTransform(verses_transformed):
+    '''
+    splits a verse line by line while removing excess space, punctuation, for use in determining rhyme structure
+    :param verses_transformed: 'verses_transformed' column of dataframe
+    :return: song split line by line, not by verses.
+    '''
+    typedict = {'verse': '<VERSE>',
+                'chorus': '<CHORUS>',
+                'pre chorus': '<PRECHORUS>',
+                'bridge': '<BRIDGE>',
+                'outro': '<OUTRO>',
+                'intro': '<INTRO>',
+                'refrain': '<REFRAIN>',
+                'hook': '<HOOK>',
+                'post chorus': '<POSTCHORUS>',
+                'other': '<OTHER>'
+                }
+    punctuation_spaces = ['(', '[', '.', '(', ')', '!', '?', ',', ':', ';', '/', '-', ']', ')', ' ', '']
+    result = [item for item in verses_transformed if item not in typedict.values()]
+    result = split_list([item for item in result if item not in punctuation_spaces],'<NEWLINE>')
+    result = [[token.lower() for token in item] for item in result]
+    for item in result:
+        item = item.append('<NEWLINE>')
+    return result
 
 
+# run
+
+m_2 = create_ngram_model_from_df(df, 2)
+print(m_2.generate_text(202, option='strong'))

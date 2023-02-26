@@ -287,26 +287,27 @@ plt.show()
 
 #9: rhyme distribution
 
-df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
-df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
-print('done!')
-
-fig = plt.figure()
-ax = sns.histplot(data=df, x='rhymescore_AA', kde=True)
-ax.set_ylabel('')
-ax.set_xlabel('Length')
-ax.set(title='Song AA Rhyme Score Distribution')
-fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
-
-fig = plt.figure()
-ax = sns.histplot(data=df, x='rhymescore_AB', kde=True)
-ax.set_ylabel('')
-ax.set_xlabel('Length')
-ax.set(title='Song AB Rhyme Score Distribution')
-fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
-
+# df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
+# df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
 # export df
 os.chdir(DATAPATH)
 df.to_csv('df_EDA.csv')
+print('done!')
+
+# os.chdir(IMGPATH)
+# fig = plt.figure()
+# ax = sns.histplot(data=df, x='rhymescore_AA', kde=True)
+# ax.set_ylabel('')
+# ax.set_xlabel('Length')
+# ax.set(title='Song AA Rhyme Score Distribution')
+# fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
+# plt.show()
+#
+# fig = plt.figure()
+# ax = sns.histplot(data=df, x='rhymescore_AB', kde=True)
+# ax.set_ylabel('')
+# ax.set_xlabel('Length')
+# ax.set(title='Song AB Rhyme Score Distribution')
+# fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
+# plt.show()
+
