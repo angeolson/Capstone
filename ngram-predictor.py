@@ -1,5 +1,6 @@
 '''
-procedure and select helper functions adapted from https://towardsdatascience.com/text-generation-using-n-gram-model-8d12d9802aa0
+procedure and select helper functions adapted from https://github.com/olegborisovv/NGram_LanguageModel/blob/main/text_generator_ngram.py
+accompanying article here: https://towardsdatascience.com/text-generation-using-n-gram-model-8d12d9802aa0
 
 '''
 
