@@ -88,6 +88,42 @@ def rhyme(inp, level):
         rhymes += [word for word, pron in entries if pron[-level:] == syllable[-level:]]
     return set(rhymes)
 
+def Convert(tup, di):
+    '''
+    from https://www.geeksforgeeks.org/python-convert-a-list-of-tuples-into-dictionary/
+    :param tup:
+    :param di:
+    :return:
+    '''
+    for a, b in tup:
+        di.setdefault(a, []).append(b)
+    return di
+
+def minimum(a, b):
+    if a <= b:
+        return a
+    else:
+        return b
+
+def rhymeCheck(word1, word2, syllable_list, level=3):
+    syllables = syllable_list
+    dict_ = {}
+    rhyme_dict = Convert(syllables, dict_) # create dict
+    word1 = word1.lower().strip()
+    word2 = word2.lower().strip()
+    if (word1 in rhyme_dict.keys()) and (word2 in rhyme_dict.keys()):
+        word1_syllables = rhyme_dict[word1][0]
+        word2_syllables = rhyme_dict[word2][0]
+        min_len = minimum(len(word1_syllables), len(word2_syllables))
+        if min_len < level:
+            level = min_len # in cases where one word is shorter and is shorter than set level of syllables, change level to smaller number
+        if word1_syllables[-level:] == word2_syllables[-level:]:
+            return True
+        else:
+            return False
+    else:
+        return False
+
 def doTheyRhyme(word1, word2, level=3):
     '''
     adapted from https://stackoverflow.com/questions/25714531/find-rhyme-using-nltk-in-python
@@ -120,7 +156,7 @@ def versesRhymeTransform(verses_transformed):
     result = split_list([item for item in result if item not in punctuation_spaces],'<NEWLINE>')
     return result
 
-def getSongRhyme(verses_transformed, level, option='AA'):
+def getSongRhyme(verses_transformed, level, syllable_list, option='AA'):
     '''
     gets the rhyme score of a song by comparing the last words of each line to the line proceeding it (when available).
     Divides the total number of rhymes by the total number of possible rhymes, returning a score between 0 (no rhymes) and 1 (either follows AA BB .. pattern perfectly or ABAB pattern perfectly)
@@ -133,13 +169,15 @@ def getSongRhyme(verses_transformed, level, option='AA'):
         max_rhymes = len(verses) - 1
         list_ = []
         for i in range(1, len(verses)):
-            list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
+            #list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
+            list_.append(rhymeCheck(verses[i - 1], verses[i], syllable_list, level=level))
         return sum(list_)/max_rhymes
     else:
         max_rhymes = (len(verses)/2) - 1
         list_ = []
         for i in range(2, len(verses)):
-            list_.append(doTheyRhyme(verses[i-2], verses[i], level=level))
+            #list_.append(doTheyRhyme(verses[i-2], verses[i], level=level))
+            list_.append(rhymeCheck(verses[i - 2], verses[i], syllable_list, level=level))
         return sum(list_)/max_rhymes
 
 def split_list(input_list,seperator):
@@ -165,11 +203,14 @@ def split_list(input_list,seperator):
 # vars
 DATAPATH = '/home/ubuntu/Capstone/'
 IMGPATH = '/home/ubuntu/Capstone/Plots'
+entries = cmudict.entries()
+syllable_list = [(word, syl) for word, syl in entries]
 
 # clean df
 os.chdir(DATAPATH)
 df = pd.read_csv('df_cleaned.csv', index_col=0)
 df = cleanData(df)
+df.reset_index(drop=True, inplace=True)
 os.chdir(IMGPATH)
 # create stats:
 
@@ -286,9 +327,13 @@ plt.show()
 # plt.show()
 
 #9: rhyme distribution
-
 # df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
 # df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
+
+test_df = df.loc[:100]
+test_df['rhymescore_AA'] = test_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AA'))
+test_df['rhymescore_AB'] = test_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AB'))
+
 # export df
 os.chdir(DATAPATH)
 df.to_csv('df_EDA.csv')
