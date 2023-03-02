@@ -101,7 +101,10 @@ class NgramModel(object):
             if n > 1:
                 context_queue.pop(0)
                 if obj == '<NEWLINE>':
-                    context_queue = (n - 1) * ['<START>']
+                    if start_option == 'random':
+                        context_queue = (n - 1) * ['<START>']
+                    else:
+                        context_queue = (n - 1) * [start_option]
                 else:
                     context_queue.append(obj)
         return ' '.join(result)
@@ -189,7 +192,7 @@ def versesTransform(verses_transformed):
     return result
 
 
-# run
-
-m_2 = create_ngram_model_from_df(df, 2)
-print(m_2.generate_text(202, option='strong'))
+# run example
+m = create_ngram_model_from_df(df, 2)
+mean_length = round(df['length'].mean())
+print(m.generate_text(mean_length, start_option='love'))
