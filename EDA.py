@@ -12,6 +12,7 @@ from nltk.corpus import stopwords
 from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
 import os
+import random
 
 # helper functions
 def cleanData(df):
@@ -134,6 +135,9 @@ def doTheyRhyme(word1, word2, level=3):
     '''
     return word1 in rhyme(word2, level)
 
+def safeDivision(n,d):
+    return n/d if d > 0 else 0
+
 def versesRhymeTransform(verses_transformed):
     '''
     splits a verse line by line while removing excess space, punctuation, for use in determining rhyme structure
@@ -171,14 +175,14 @@ def getSongRhyme(verses_transformed, level, syllable_list, option='AA'):
         for i in range(1, len(verses)):
             #list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
             list_.append(rhymeCheck(verses[i - 1], verses[i], syllable_list, level=level))
-        return sum(list_)/max_rhymes
+        return safeDivision(sum(list_), max_rhymes)
     else:
         max_rhymes = (len(verses)/2) - 1
         list_ = []
         for i in range(2, len(verses)):
             #list_.append(doTheyRhyme(verses[i-2], verses[i], level=level))
             list_.append(rhymeCheck(verses[i - 2], verses[i], syllable_list, level=level))
-        return sum(list_)/max_rhymes
+        return safeDivision(sum(list_), max_rhymes)
 
 def split_list(input_list,seperator):
     '''
@@ -205,6 +209,8 @@ DATAPATH = '/home/ubuntu/Capstone/'
 IMGPATH = '/home/ubuntu/Capstone/Plots'
 entries = cmudict.entries()
 syllable_list = [(word, syl) for word, syl in entries]
+SEED = 48
+random.seed(48)
 
 # clean df
 os.chdir(DATAPATH)
@@ -241,7 +247,7 @@ plt.show()
 # 3: length histogram
 df['length'] = df['EDA_verses'].apply(lambda x:len(x))
 fig = plt.figure()
-ax = sns.histplot(data=df, x='length', kde=True)
+ax = sns.histplot(data=df, x='length', kde=False)
 ax.set_ylabel('')
 ax.set_xlabel('Length')
 ax.set(title='Song Length Distribution')
@@ -330,29 +336,34 @@ plt.show()
 # df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
 # df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
 
-test_df = df.loc[:100]
-test_df['rhymescore_AA'] = test_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AA'))
-test_df['rhymescore_AB'] = test_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AB'))
+sample_df = df.sample(n=300, random_state=SEED)
+
+sample_df['rhymescore_AA'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AA'))
+print('done with AA!')
+sample_df['rhymescore_AB'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AB'))
+print('done with AB!')
 
 # export df
 os.chdir(DATAPATH)
 df.to_csv('df_EDA.csv')
-print('done!')
+sample_df.to_csv('rhyme_sample.csv')
+print('exported')
+print('done')
 
-# os.chdir(IMGPATH)
-# fig = plt.figure()
-# ax = sns.histplot(data=df, x='rhymescore_AA', kde=True)
-# ax.set_ylabel('')
-# ax.set_xlabel('Length')
-# ax.set(title='Song AA Rhyme Score Distribution')
-# fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
-# plt.show()
-#
-# fig = plt.figure()
-# ax = sns.histplot(data=df, x='rhymescore_AB', kde=True)
-# ax.set_ylabel('')
-# ax.set_xlabel('Length')
-# ax.set(title='Song AB Rhyme Score Distribution')
-# fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
-# plt.show()
+os.chdir(IMGPATH)
+fig = plt.figure()
+ax = sns.histplot(data=sample_df, x='rhymescore_AA', kde=True)
+ax.set_ylabel('')
+ax.set_xlabel('Length')
+ax.set(title='Song AA Rhyme Score Distribution')
+fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
+plt.show()
+
+fig = plt.figure()
+ax = sns.histplot(data=sample_df, x='rhymescore_AB', kde=True)
+ax.set_ylabel('')
+ax.set_xlabel('Length')
+ax.set(title='Song AB Rhyme Score Distribution')
+fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
+plt.show()
 
