@@ -104,24 +104,14 @@ class Dataset(torch.utils.data.Dataset):
 
         return x, y
 
-    # def __data_generation(self, sequences_batch, next_words_batch):
-    #     X = np.zeros((self.batch_size, self.sequence_length, len(self.uniq_words)), dtype=np.bool)
-    #     y = np.zeros((self.batch_size, len(self.uniq_words)), dtype=np.bool)
-    #
-    #     for i, seq in enumerate(sequences_batch):
-    #         for j, word in enumerate(seq):
-    #             X[i, j, word] = 1
-    #             y[i, next_words_batch[i]] = 1
-    #     return X, y
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         input = self.dataframe.iloc[idx]['lyrics']
         tokenized_input = self.tokenizer(input)
-        X, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index, sequence_length=self.sequence_length, max_len=self.max_len)
-
-        return torch.tensor(X), torch.tensor(y)
+        x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index, sequence_length=self.sequence_length, max_len=self.max_len)
+        return torch.tensor(x), torch.tensor(y)
 
 class Model(nn.Module):
     def __init__(self, dataset):
@@ -129,7 +119,9 @@ class Model(nn.Module):
         self.hidden_dim = 128
         self.embedding_dim = 128
         self.num_layers = 3
+        self.output_dim = 1
         n_vocab = len(dataset.uniq_words)
+        self.max_len = dataset.max_len
         self.embedding = nn.Embedding(
             num_embeddings=n_vocab,
             embedding_dim=self.embedding_dim,
@@ -139,60 +131,51 @@ class Model(nn.Module):
             hidden_size=self.hidden_dim,
             num_layers=self.num_layers,
             dropout=0.2,
-            batch_fist=True
+            batch_first=True
         )
-        self.fc = nn.Linear(self.lstm_size, n_vocab)
+        self.fc = nn.Linear(self.hidden_dim, self.output_dim)
 
     def forward(self, x, hidden):
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
         return out, hidden
-    def forward(self, x, hidden, attention_mask):
-        batch_size = x.size(0)
-        embedded = self.bert(input_ids=x,attention_mask=attention_mask)[0]
-        #input = embedded.permute(1, 0, 2)
-        lstm_out, hidden = self.lstm(embedded, hidden)
-        lstm_out = lstm_out.contiguous().view(-1, self.hidden_dim)
-        out = self.dropout(lstm_out)
-        out = self.fc(out)
-        out = out.view(batch_size, -1, self.output_dim)
-        out = out[:, -1]
-        return out, hidden
-    def init_state(self, sequence_length):
-        return (torch.zeros(self.num_layers, sequence_length, self.lstm_size),
-                torch.zeros(self.num_layers, sequence_length, self.lstm_size))
 
-    def init_hidden(self, batch_size, ):
-        h0 = torch.zeros((self.no_layers, batch_size, self.hidden_dim)).to(device)
-        c0 = torch.zeros((self.no_layers, batch_size, self.hidden_dim)).to(device)
+    # def init_state(self, sequence_length):
+    #     return (torch.zeros(self.num_layers, sequence_length, self.lstm_size),
+    #             torch.zeros(self.num_layers, sequence_length, self.lstm_size))
+
+    def init_hidden(self, batch_size):
+        h0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
+        c0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
         return h0, c0
 
 #--------------MODEL FUNCTIONS----------------
-def train(dataset, model, batch_size, sequence_length, max_epochs):
+def train(dataset, model, batch_size, sequence_length, max_len, max_epochs):
     model.train()
     dataloader = DataLoader(dataset, batch_size=batch_size)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(max_epochs):
-        state_h, state_c = model.init_state(sequence_length)
+        state_h, state_c = model.init_hidden(batch_size)
         #for batch, (x, y) in enumerate(dataloader):
         for batch in dataloader:
             optimizer.zero_grad()
-            x = batch[0]
-            y = batch[1]
-            y_pred, (state_h, state_c) = model(x, (state_h, state_c))
-            loss = criterion(y_pred.transpose(1, 2), y)
-            state_h = state_h.detach()
-            state_c = state_c.detach()
-            loss.backward()
-            optimizer.step()
-            print({ 'epoch': epoch, 'batch': batch, 'loss': loss.item() })
+            X = batch[0]
+            Y = batch[1]
+            for i in range(max_len):
+                y_pred, (state_h, state_c) = model(X[i].to(device), (state_h, state_c))
+                loss = criterion(y_pred.transpose(1, 2), Y[i]) # want y_pred to be same shape as Y[i]
+                state_h = state_h.detach()
+                state_c = state_c.detach()
+                loss.backward()
+                optimizer.step()
+                print({ 'epoch': epoch, 'batch': batch, 'loss': loss.item() })
 
 def predict(dataset, model, text, next_words=100):
     model.eval()
     words = text.split(' ')
-    state_h, state_c = model.init_state(len(words))
+    state_h, state_c = model.init_hidden(len(words))
     for i in range(0, next_words):
         x = torch.tensor([[dataset.word_to_index[w] for w in words[i:]]])
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
@@ -206,7 +189,7 @@ def predict(dataset, model, text, next_words=100):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df.reset_index(drop=True, inplace=True)
 dataset = Dataset(dataframe=df, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN)
-model = Model(dataset)
+model = Model(dataset).to(device)
 
 
 # testing
@@ -215,7 +198,7 @@ model = Model(dataset)
 #     break
 
 #------------MODEL TRAIN----------------
-train(dataset, model, batch_size=BATCH_SIZE, sequence_length=SEQUENCE_LEN, max_epochs=EPOCHS)
+train(dataset, model, batch_size=BATCH_SIZE, sequence_length=SEQUENCE_LEN, max_epochs=EPOCHS, max_len=MAX_LEN)
 
 #------------MODEL RUN-----------------
 print(predict(dataset, model, text='love'))
