@@ -30,9 +30,9 @@ def tokenizer(x):
 
 #---------SET VARS--------------------
 EPOCHS = 2
-BATCH_SIZE = 512
+BATCH_SIZE = 548
 SEQUENCE_LEN = 4
-MAX_LEN = 210
+MAX_LEN = 270
 #--------CLASS DEFINITIONS-------------
 
 class Dataset(torch.utils.data.Dataset):
@@ -54,7 +54,7 @@ class Dataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.batch_size = batch_size
         self.max_len = max_len
-
+        self.inputs, self.targets = self.get_data(self.dataframe)
     def load_words(self, dataframe):
         text = dataframe['lyrics'].str.cat(sep=' ')
         return text.split(' ')
@@ -65,7 +65,7 @@ class Dataset(torch.utils.data.Dataset):
         return unique_words_padding
 
     def __len__(self):
-        return len(self.dataframe)
+        return len(self.inputs)
 
     def build_sequences(self, text, word_to_index, sequence_length, max_len):
         '''
@@ -86,7 +86,7 @@ class Dataset(torch.utils.data.Dataset):
                 sequence = [word_to_index[char] for char in sequence]
 
                 # Get word target
-                # Then, transfrom it into its idx representation
+                # Then, transform it into its idx representation
                 target = text[i + sequence_length]
                 target = word_to_index[target]
 
@@ -104,13 +104,32 @@ class Dataset(torch.utils.data.Dataset):
 
         return x, y
 
+    def get_data(self, dataframe):
+        X = list()
+        Y = list()
 
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-        input = self.dataframe.iloc[idx]['lyrics']
-        tokenized_input = self.tokenizer(input)
-        x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index, sequence_length=self.sequence_length, max_len=self.max_len)
+        for i in range(len(dataframe)):
+            input = dataframe.iloc[i]['lyrics']
+            tokenized_input = self.tokenizer(input)
+            x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
+                                        sequence_length=self.sequence_length, max_len=self.max_len)
+            X.append(x)
+            Y.append(y)
+
+        inputs = [sequence for song in X for sequence in song]
+        targets = [targ for song in Y for targ in song]
+        return np.array(inputs), np.array(targets)
+
+    def to_categorical(self, y, num_classes):
+        """ 1-hot encodes a tensor from https://discuss.pytorch.org/t/is-there-something-like-keras-utils-to-categorical-in-pytorch/5960"""
+        return np.eye(num_classes, dtype='uint8')[y]
+
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
+        x = self.inputs[index]
+        y = self.targets[index]
+        y = self.to_categorical(y=y, num_classes=len(dataset.uniq_words)) # equiv to n_vocab
         return torch.tensor(x), torch.tensor(y)
 
 class Model(nn.Module):
@@ -119,7 +138,6 @@ class Model(nn.Module):
         self.hidden_dim = 128
         self.embedding_dim = 128
         self.num_layers = 3
-        self.output_dim = 1
         n_vocab = len(dataset.uniq_words)
         self.max_len = dataset.max_len
         self.embedding = nn.Embedding(
@@ -133,17 +151,16 @@ class Model(nn.Module):
             dropout=0.2,
             batch_first=True
         )
-        self.fc = nn.Linear(self.hidden_dim, self.output_dim)
+        self.fc = nn.Linear(self.hidden_dim, n_vocab)
 
     def forward(self, x, hidden):
+        batch_size = x.size(0)
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
-        return out, hidden
+        out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use atention mechanism to create linear combo of all
 
-    # def init_state(self, sequence_length):
-    #     return (torch.zeros(self.num_layers, sequence_length, self.lstm_size),
-    #             torch.zeros(self.num_layers, sequence_length, self.lstm_size))
+        return out, hidden
 
     def init_hidden(self, batch_size):
         h0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
@@ -161,16 +178,16 @@ def train(dataset, model, batch_size, sequence_length, max_len, max_epochs):
         #for batch, (x, y) in enumerate(dataloader):
         for batch in dataloader:
             optimizer.zero_grad()
-            X = batch[0]
-            Y = batch[1]
-            for i in range(max_len):
-                y_pred, (state_h, state_c) = model(X[i].to(device), (state_h, state_c))
-                loss = criterion(y_pred.transpose(1, 2), Y[i]) # want y_pred to be same shape as Y[i]
-                state_h = state_h.detach()
-                state_c = state_c.detach()
-                loss.backward()
-                optimizer.step()
-                print({ 'epoch': epoch, 'batch': batch, 'loss': loss.item() })
+            X = batch[0].to(device)
+            Y = batch[1].to(device)
+            y_pred, (state_h, state_c) = model(X, (state_h, state_c))
+            # loss = criterion(y_pred.transpose(1, 2), Y)
+            loss = criterion(y_pred, Y.float())
+            # state_h = state_h.detach()
+            # state_c = state_c.detach()
+            loss.backward()
+            optimizer.step()
+            print({ 'epoch': epoch, 'batch': batch, 'loss': loss.item() })
 
 def predict(dataset, model, text, next_words=100):
     model.eval()
@@ -190,12 +207,6 @@ df = pd.read_csv('df_LSTM.csv', index_col=0)
 df.reset_index(drop=True, inplace=True)
 dataset = Dataset(dataframe=df, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN)
 model = Model(dataset).to(device)
-
-
-# testing
-# dataloader = DataLoader(dataset, batch_size=BATCH_SIZE)
-# for batch in dataloader:
-#     break
 
 #------------MODEL TRAIN----------------
 train(dataset, model, batch_size=BATCH_SIZE, sequence_length=SEQUENCE_LEN, max_epochs=EPOCHS, max_len=MAX_LEN)
