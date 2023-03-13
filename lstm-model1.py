@@ -190,10 +190,12 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs):
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
+    all_loss = []
     for epoch in range(max_epochs):
         state_h, state_c = model.init_hidden(batch_size)
-        cnt = 0
         model.train()
+        train_losses = []
+        val_losses = []
         for batch in train_dataloader:
             optimizer.zero_grad()
             X = batch[0].to(device)
@@ -205,20 +207,29 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs):
             state_c = state_c.detach()
             loss.backward()
             optimizer.step()
-            print({ 'epoch': epoch, 'batch': cnt, 'train loss': loss.item() })
+            train_losses.append(loss.item())
+            # print({ 'epoch': epoch, 'batch': cnt, 'train loss': loss.item() })
         model.eval()
         for batch in val_dataloader:
             X = batch[0].to(device)
             Y = batch[1].to(device)
             y_pred, (state_h, state_c) = model(X, (state_h, state_c))
             # loss = criterion(y_pred.transpose(1, 2), Y)
-            loss = criterion(y_pred, Y.float())
+            val_loss = criterion(y_pred, Y.float())
             state_h = state_h.detach()
             state_c = state_c.detach()
-            optimizer.step()
-            print({'epoch': epoch, 'batch': cnt, 'train loss': loss.item()})
+            val_losses.append(val_loss.item())
+            # print({'epoch': epoch, 'batch': cnt, 'train loss': loss.item()})
 
-            cnt += 1
+        epoch_train_loss = np.mean(train_losses)
+        epoch_val_loss = np.mean(val_losses)
+        all_loss.append(epoch_val_loss)
+        print(f'Epoch {epoch}')
+        print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
+        best_loss = max(all_loss)
+        if epoch_val_loss >= best_loss:
+            torch.save(model.state_dict(), "model_1.pt")
+            print('model saved!')
 
 def predict(dataset, model, text, next_words=100):
     model.eval()
@@ -244,7 +255,7 @@ uniq_words = get_uniq_words(words)
 
 # split data
 train_, test_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
-train_, val_ = train_test_split(train, train_size=0.8, random_state=SEED)
+train_, val_ = train_test_split(train_, train_size=0.8, random_state=SEED)
 
 #-------------MODEL PREP----------------
 train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
