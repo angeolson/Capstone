@@ -8,10 +8,17 @@ from torch.utils.data import DataLoader
 from collections import Counter
 import numpy as np
 import random
+from sklearn.model_selection import train_test_split
 
 SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+#---------SET VARS--------------------
+EPOCHS = 2
+BATCH_SIZE = 548
+SEQUENCE_LEN = 4
+MAX_LEN = 270
 
 # -----------HELPER FUNCTIONS------------
 def cleanData(df):
@@ -27,12 +34,15 @@ def cleanData(df):
 def tokenizer(x):
     return x.split(" ")
 
+def load_words(dataframe):
+    text = dataframe['lyrics'].str.cat(sep=' ')
+    return text.split(' ')
+def get_uniq_words(words):
+    word_counts = Counter(words)
+    unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
+    unique_words_padding = ['PAD'] + unique_words
+    return unique_words_padding
 
-#---------SET VARS--------------------
-EPOCHS = 2
-BATCH_SIZE = 548
-SEQUENCE_LEN = 4
-MAX_LEN = 270
 #--------CLASS DEFINITIONS-------------
 
 class Dataset(torch.utils.data.Dataset):
@@ -42,11 +52,16 @@ class Dataset(torch.utils.data.Dataset):
         sequence_length,
         tokenizer,
         batch_size,
-        max_len
+        max_len,
+        words,
+        uniq_words,
+
     ):
         self.dataframe = dataframe
-        self.words = self.load_words(self.dataframe)
-        self.uniq_words = self.get_uniq_words()
+        # self.words = self.load_words(self.dataframe)
+        # self.uniq_words = self.get_uniq_words()
+        self.uniq_words = uniq_words
+        self.words = words
         self.index_to_word = {index: word for index, word in enumerate(self.uniq_words)}
         self.word_to_index = {word: index for index, word in enumerate(self.uniq_words)}
         self.words_indexes = [self.word_to_index[w] for w in self.words]
@@ -55,14 +70,15 @@ class Dataset(torch.utils.data.Dataset):
         self.batch_size = batch_size
         self.max_len = max_len
         self.inputs, self.targets = self.get_data(self.dataframe)
-    def load_words(self, dataframe):
-        text = dataframe['lyrics'].str.cat(sep=' ')
-        return text.split(' ')
-    def get_uniq_words(self):
-        word_counts = Counter(self.words)
-        unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-        unique_words_padding = ['PAD'] + unique_words
-        return unique_words_padding
+
+    # def load_words(self, dataframe):
+    #     text = dataframe['lyrics'].str.cat(sep=' ')
+    #     return text.split(' ')
+    # def get_uniq_words(self):
+    #     word_counts = Counter(self.words)
+    #     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
+    #     unique_words_padding = ['PAD'] + unique_words
+    #     return unique_words_padding
 
     def __len__(self):
         return len(self.inputs)
@@ -95,9 +111,9 @@ class Dataset(torch.utils.data.Dataset):
                 y.append(target)
 
             except:
-                sequence = [0]*sequence_length
+                sequence = [word_to_index['PAD']]*sequence_length
                 x.append(sequence)
-                y.append(0)
+                y.append(word_to_index['PAD'])
 
         x = np.array(x)
         y = np.array(y)
@@ -109,7 +125,7 @@ class Dataset(torch.utils.data.Dataset):
         Y = list()
 
         for i in range(len(dataframe)):
-            input = dataframe.iloc[i]['lyrics']
+            input = 'NEWSONG' + dataframe.iloc[i]['lyrics']
             tokenized_input = self.tokenizer(input)
             x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
                                         sequence_length=self.sequence_length, max_len=self.max_len)
@@ -129,7 +145,7 @@ class Dataset(torch.utils.data.Dataset):
             index = index.tolist()
         x = self.inputs[index]
         y = self.targets[index]
-        y = self.to_categorical(y=y, num_classes=len(dataset.uniq_words)) # equiv to n_vocab
+        y = self.to_categorical(y=y, num_classes=len(self.uniq_words)) # equiv to n_vocab
         return torch.tensor(x), torch.tensor(y)
 
 class Model(nn.Module):
@@ -159,7 +175,7 @@ class Model(nn.Module):
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
-        out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use atention mechanism to create linear combo of all
+        out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
         out = self.softmax(out)
         return out, hidden
 
@@ -169,26 +185,40 @@ class Model(nn.Module):
         return h0, c0
 
 #--------------MODEL FUNCTIONS----------------
-def train(dataset, model, batch_size, sequence_length, max_len, max_epochs):
-    model.train()
-    dataloader = DataLoader(dataset, batch_size=batch_size)
+def train(train_dataset, val_dataset, model, batch_size, max_epochs):
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(max_epochs):
         state_h, state_c = model.init_hidden(batch_size)
-        #for batch, (x, y) in enumerate(dataloader):
-        for batch in dataloader:
+        cnt = 0
+        model.train()
+        for batch in train_dataloader:
             optimizer.zero_grad()
             X = batch[0].to(device)
             Y = batch[1].to(device)
             y_pred, (state_h, state_c) = model(X, (state_h, state_c))
             # loss = criterion(y_pred.transpose(1, 2), Y)
             loss = criterion(y_pred, Y.float())
-            # state_h = state_h.detach()
-            # state_c = state_c.detach()
+            state_h = state_h.detach()
+            state_c = state_c.detach()
             loss.backward()
             optimizer.step()
-            print({ 'epoch': epoch, 'batch': batch, 'loss': loss.item() })
+            print({ 'epoch': epoch, 'batch': cnt, 'train loss': loss.item() })
+        model.eval()
+        for batch in val_dataloader:
+            X = batch[0].to(device)
+            Y = batch[1].to(device)
+            y_pred, (state_h, state_c) = model(X, (state_h, state_c))
+            # loss = criterion(y_pred.transpose(1, 2), Y)
+            loss = criterion(y_pred, Y.float())
+            state_h = state_h.detach()
+            state_c = state_c.detach()
+            optimizer.step()
+            print({'epoch': epoch, 'batch': cnt, 'train loss': loss.item()})
+
+            cnt += 1
 
 def predict(dataset, model, text, next_words=100):
     model.eval()
@@ -203,14 +233,27 @@ def predict(dataset, model, text, next_words=100):
         words.append(dataset.index_to_word[word_index])
     return words
 
-#-------------MODEL PREP----------------
+#---------LOAD DATA--------------------
 df = pd.read_csv('df_LSTM.csv', index_col=0)
-df.reset_index(drop=True, inplace=True)
-dataset = Dataset(dataframe=df, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN)
-model = Model(dataset).to(device)
+df_copy = df.copy()
+df_copy.reset_index(drop=True, inplace=True)
+
+# create word dictionary for all datasets
+words = load_words(df_copy)
+uniq_words = get_uniq_words(words)
+
+# split data
+train_, test_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
+train_, val_ = train_test_split(train, train_size=0.8, random_state=SEED)
+
+#-------------MODEL PREP----------------
+train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
+val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
+test_dataset = Dataset(dataframe=test_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
+model = Model().to(device)
 
 #------------MODEL TRAIN----------------
-train(dataset, model, batch_size=BATCH_SIZE, sequence_length=SEQUENCE_LEN, max_epochs=EPOCHS, max_len=MAX_LEN)
+train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS)
 
 #------------MODEL RUN-----------------
-print(predict(dataset, model, text='I love you'))
+print(predict(dataset=test_dataset, model=model, text='I love you'))
