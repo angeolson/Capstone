@@ -152,14 +152,15 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
+        self.softmax = nn.Softmax()
 
     def forward(self, x, hidden):
-        batch_size = x.size(0)
+        # batch_size = x.size(0)
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
         out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use atention mechanism to create linear combo of all
-
+        out = self.softmax(out)
         return out, hidden
 
     def init_hidden(self, batch_size):
@@ -212,4 +213,4 @@ model = Model(dataset).to(device)
 train(dataset, model, batch_size=BATCH_SIZE, sequence_length=SEQUENCE_LEN, max_epochs=EPOCHS, max_len=MAX_LEN)
 
 #------------MODEL RUN-----------------
-print(predict(dataset, model, text='love'))
+print(predict(dataset, model, text='I love you'))
