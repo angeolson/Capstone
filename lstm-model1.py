@@ -15,7 +15,7 @@ random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 #---------SET VARS--------------------
-EPOCHS = 2
+EPOCHS = 5
 MAX_LEN = 400
 BATCH_SIZE = MAX_LEN + 1
 SEQUENCE_LEN = 4
@@ -170,11 +170,11 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        self.softmax = nn.Softmax(dim=0)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x, hidden):
         # batch_size = x.size(0)
-        embed = self.embedding(x)
+        embed = self.embedding(x, padding_idx=0)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
         out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
@@ -274,6 +274,3 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
 
 #------------MODEL TRAIN----------------
 train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS)
-
-#------------MODEL RUN-----------------
-# print(predict(dataset=test_dataset, model=model, text='I love you'))

@@ -35,7 +35,7 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        self.softmax = nn.Softmax(dim=0)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x, hidden):
         # batch_size = x.size(0)
@@ -60,7 +60,7 @@ def predict(word_to_index, index_to_word, model, text, next_words=250):
         x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
         last_word_logits = y_pred[0]
-        p = last_word_logits.detach().numpy()
+        p = last_word_logits.detach().cpu().numpy()
         word_index = np.random.choice(len(last_word_logits), p=p)
         words.append(index_to_word[word_index])
     return words
@@ -72,7 +72,7 @@ def load_words(dataframe):
 def get_uniq_words(words):
     word_counts = Counter(words)
     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    unique_words_padding = ['PAD'] + unique_words
+    unique_words_padding = ['PAD', '<NEWSONG>'] + unique_words
     return unique_words_padding
 
 
@@ -95,4 +95,4 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
 model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='i love you', next_words=250))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='<NEWSONG> <intro> hey you', next_words=250))
