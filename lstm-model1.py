@@ -40,7 +40,7 @@ def load_words(dataframe):
 def get_uniq_words(words):
     word_counts = Counter(words)
     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    unique_words_padding = ['PAD'] + unique_words
+    unique_words_padding = ['PAD', '<NEWSONG>'] + unique_words
     return unique_words_padding
 
 #--------CLASS DEFINITIONS-------------
@@ -125,7 +125,7 @@ class Dataset(torch.utils.data.Dataset):
         Y = list()
 
         for i in range(len(dataframe)):
-            input = 'NEWSONG' + dataframe.iloc[i]['lyrics']
+            input = '<NEWSONG>' + dataframe.iloc[i]['lyrics']
             tokenized_input = self.tokenizer(input)
             x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
                                         sequence_length=self.sequence_length, max_len=self.max_len)

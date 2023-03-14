@@ -55,12 +55,12 @@ class Model(nn.Module):
 def predict(word_to_index, index_to_word, model, text, next_words=250):
     model.eval()
     words = text.split(' ')
-    state_h, state_c = model.init_hidden(len(words))
+    state_h, state_c = model.init_hidden(1)
     for i in range(0, next_words):
-        x = torch.tensor([[word_to_index[w] for w in words[i:]]])
+        x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
-        last_word_logits = y_pred[0][-1]
-        p = torch.nn.functional.softmax(last_word_logits, dim=0).detach().numpy()
+        last_word_logits = y_pred[0]
+        p = last_word_logits.detach().numpy()
         word_index = np.random.choice(len(last_word_logits), p=p)
         words.append(index_to_word[word_index])
     return words
@@ -84,7 +84,7 @@ df_copy = df.iloc[0:500]
 
 # create word dictionary for all datasets
 all_words = load_words(df_copy)
-uniq_words = get_uniq_words(words)
+uniq_words = get_uniq_words(all_words)
 
 index_to_word = {index: word for index, word in enumerate(uniq_words)}
 word_to_index = {word: index for index, word in enumerate(uniq_words)}
@@ -95,4 +95,4 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
 model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='I love you', next_words=250))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='i love you', next_words=250))
