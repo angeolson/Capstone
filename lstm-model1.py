@@ -16,7 +16,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 #---------SET VARS--------------------
 EPOCHS = 5
-MAX_LEN = 400
+MAX_LEN = 350
 BATCH_SIZE = MAX_LEN + 1
 SEQUENCE_LEN = 4
 
@@ -161,6 +161,7 @@ class Model(nn.Module):
         self.embedding = nn.Embedding(
             num_embeddings=n_vocab,
             embedding_dim=self.embedding_dim,
+            padding_idx=0
         )
         self.lstm = nn.LSTM(
             input_size=self.embedding_dim,
@@ -174,7 +175,7 @@ class Model(nn.Module):
 
     def forward(self, x, hidden):
         # batch_size = x.size(0)
-        embed = self.embedding(x, padding_idx=0)
+        embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
         out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
@@ -256,7 +257,7 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:500]
+df_copy = df.iloc[0:700]
 
 # create word dictionary for all datasets
 words = load_words(df_copy)

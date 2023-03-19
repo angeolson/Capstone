@@ -195,4 +195,4 @@ def versesTransform(verses_transformed):
 # run example
 m = create_ngram_model_from_df(df, 2)
 mean_length = round(df['length'].mean())
-print(m.generate_text(mean_length, start_option='love'))
+print(m.generate_text(mean_length, start_option='you'))

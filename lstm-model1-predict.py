@@ -10,7 +10,7 @@ import random
 SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-MAX_LEN = 400
+MAX_LEN = 350
 
 #--------MODEL DEFINITION-------------
 class Model(nn.Module):
@@ -80,7 +80,7 @@ def get_uniq_words(words):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:500]
+df_copy = df.iloc[0:700]
 
 # create word dictionary for all datasets
 all_words = load_words(df_copy)
@@ -95,4 +95,4 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
 model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='<NEWSONG> <intro> hey you', next_words=250))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey', next_words=250))
