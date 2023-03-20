@@ -11,21 +11,48 @@ SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 MAX_LEN = 350
+glove = True
+
+embedding_dim = 100  # set = 50 for the 50d file, eg.
+filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
+
+#----HELPER FUNCTIONS-------
+def embedding_for_vocab(filepath, word_index,
+                        embedding_dim):
+    vocab_size = len(word_index)
+
+    # Adding again 1 because of reserved 0 index
+    embedding_matrix_vocab = np.zeros((vocab_size,
+                                       embedding_dim))
+
+    with open(filepath, encoding="utf8") as f:
+        for line in f:
+            word, *vector = line.split()
+            if word in word_index:
+                idx = word_index[word]
+                embedding_matrix_vocab[idx] = np.array(
+                    vector, dtype=np.float32)[:embedding_dim]
+
+    return embedding_matrix_vocab
 
 #--------MODEL DEFINITION-------------
 class Model(nn.Module):
     def __init__(self, uniq_words, max_len):
         super(Model, self).__init__()
         self.hidden_dim = 128
-        self.embedding_dim = 128
+        self.embedding_dim = 100
         self.num_layers = 3
         # n_vocab = len(dataset.uniq_words)
         # self.max_len = dataset.max_len
         n_vocab = len(uniq_words)
         self.max_len = max_len
-        self.embedding = nn.Embedding(
+        if glove is True:
+            self.embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embedding_matrix), padding_idx=0)
+        else:
+            self.embedding = nn.Embedding(
             num_embeddings=n_vocab,
             embedding_dim=self.embedding_dim,
+            padding_idx=0
         )
         self.lstm = nn.LSTM(
             input_size=self.embedding_dim,
@@ -89,6 +116,7 @@ uniq_words = get_uniq_words(all_words)
 index_to_word = {index: word for index, word in enumerate(uniq_words)}
 word_to_index = {word: index for index, word in enumerate(uniq_words)}
 words_indexes = [word_to_index[w] for w in all_words]
+embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_index, embedding_dim=embedding_dim)
 
 #---------LOAD MODEL--------------------
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
