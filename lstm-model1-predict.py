@@ -62,15 +62,16 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        self.softmax = nn.Softmax(dim=1)
+        #self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax2d()
 
     def forward(self, x, hidden):
         # batch_size = x.size(0)
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
-        out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
-        out = self.softmax(out)
+        #out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
+        #out = self.softmax(out)
         return out, hidden
 
     def init_hidden(self, batch_size):
@@ -86,8 +87,11 @@ def predict(word_to_index, index_to_word, model, text, next_words=250):
     for i in range(0, next_words):
         x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
-        last_word_logits = y_pred[0]
-        p = last_word_logits.detach().cpu().numpy()
+        last_word_logits = y_pred[0][-1]
+        softmax = nn.Softmax(dim=0)
+        word_softmax = softmax(last_word_logits)
+        #p = last_word_logits.detach().cpu().numpy()
+        p = word_softmax.detach().cpu().numpy()
         word_index = np.random.choice(len(last_word_logits), p=p)
         words.append(index_to_word[word_index])
     return words
@@ -107,7 +111,7 @@ def get_uniq_words(words):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:700]
+df_copy = df.iloc[0:750]
 
 # create word dictionary for all datasets
 all_words = load_words(df_copy)
@@ -123,4 +127,4 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
 model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey', next_words=250))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey i love you', next_words=250))

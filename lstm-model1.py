@@ -16,10 +16,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 5
+EPOCHS = 10
 MAX_LEN = 350
-BATCH_SIZE = MAX_LEN + 1
 SEQUENCE_LEN = 4
+BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
 
 embedding_dim = 100  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
@@ -119,27 +119,32 @@ class Dataset(torch.utils.data.Dataset):
         '''
         x = list()
         y = list()
+        text_length = len(text)
+        if text_length < max_len:
+            for i in range(max_len-text_length):
+                text.append('PAD')
+        for i in range(max_len - (sequence_length + 1)):
+            # try:
+            # Get window of chars from text
+            # Then, transform it into its idx representation
+            sequence = text[i:i + sequence_length]
+            sequence = [word_to_index[char] for char in sequence]
 
-        for i in range(max_len):
-            try:
-                # Get window of chars from text
-                # Then, transform it into its idx representation
-                sequence = text[i:i + sequence_length]
-                sequence = [word_to_index[char] for char in sequence]
+            # Get word target
+            # Then, transform it into its idx representation
+            # target = text[i + sequence_length]
+            # target = word_to_index[target]
+            target = text[i+1: i + sequence_length + 1] # longer than +1 token out
+            target = [word_to_index[char] for char in target]
 
-                # Get word target
-                # Then, transform it into its idx representation
-                target = text[i + sequence_length]
-                target = word_to_index[target]
+            # Save sequences and targets
+            x.append(sequence)
+            y.append(target)
 
-                # Save sequences and targets
-                x.append(sequence)
-                y.append(target)
-
-            except:
-                sequence = [word_to_index['PAD']]*sequence_length
-                x.append(sequence)
-                y.append(word_to_index['PAD'])
+            # except:
+            #     sequence = [word_to_index['PAD']]*sequence_length
+            #     x.append(sequence)
+            #     y.append(sequence)
 
         x = np.array(x)
         y = np.array(y)
@@ -151,7 +156,7 @@ class Dataset(torch.utils.data.Dataset):
         Y = list()
 
         for i in range(len(dataframe)):
-            input = '<NEWSONG>' + dataframe.iloc[i]['lyrics']
+            input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
             tokenized_input = self.tokenizer(input)
             x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
                                         sequence_length=self.sequence_length, max_len=self.max_len)
@@ -200,15 +205,16 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        self.softmax = nn.Softmax(dim=1)
+        #self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax2d()
 
     def forward(self, x, hidden):
         # batch_size = x.size(0)
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
-        out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
-        out = self.softmax(out)
+        # out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
+        # out = self.softmax(out)
         return out, hidden
 
     def init_hidden(self, batch_size):
@@ -220,7 +226,8 @@ class Model(nn.Module):
 def train(train_dataset, val_dataset, model, batch_size, max_epochs):
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
-    criterion = nn.CrossEntropyLoss()
+    #criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     all_loss = []
     for epoch in range(max_epochs):
@@ -286,7 +293,7 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:700]
+df_copy = df.iloc[0:750]
 
 # create word dictionary for all datasets
 words = load_words(df_copy)
