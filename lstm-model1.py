@@ -134,7 +134,7 @@ class Dataset(torch.utils.data.Dataset):
             # Then, transform it into its idx representation
             # target = text[i + sequence_length]
             # target = word_to_index[target]
-            target = text[i+1: i + sequence_length + 1] # longer than +1 token out
+            target = text[i+1: i + 1 + sequence_length] # longer than +1 token out
             target = [word_to_index[char] for char in target]
 
             # Save sequences and targets
