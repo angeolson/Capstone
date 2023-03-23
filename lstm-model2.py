@@ -1,13 +1,7 @@
-# Adapted from https://towardsdatascience.com/how-to-fine-tune-gpt-2-for-text-generation-ae2ea53bc272
+# Adapted from https://towardsdatascience.com/how-to-fine-tune-gpt-2-for-text-generation-ae2ea53bc272, github https://github.com/francoisstamant/lyrics-generation-with-GPT2
 
 # imports
 import pandas as pd
-import torch
-from torch import nn, optim
-from torch.utils.data import DataLoader
-from collections import Counter
-import numpy as np
-import random
 from sklearn.model_selection import train_test_split
 import random
 import torch
@@ -181,8 +175,6 @@ tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 model = GPT2LMHeadModel.from_pretrained('gpt2')
 
 #Accumulated batch size (since GPT2 is so big)
-
-
 # load data
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
