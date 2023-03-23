@@ -82,7 +82,9 @@ class Model(nn.Module):
 # -----------HELPER FUNCTIONS------------
 def predict(word_to_index, index_to_word, model, text, next_words=250):
     model.eval()
-    words = text.split(' ')
+    words = ['<NEWSONG>']
+    for item in text.split(' '):
+        words.append(item)
     state_h, state_c = model.init_hidden(1)
     for i in range(0, next_words):
         x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)

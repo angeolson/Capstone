@@ -226,8 +226,8 @@ class Model(nn.Module):
 def train(train_dataset, val_dataset, model, batch_size, max_epochs):
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
-    #criterion = nn.CrossEntropyLoss()
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
+    #criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     all_loss = []
     for epoch in range(max_epochs):
