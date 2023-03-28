@@ -16,7 +16,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 10
+EPOCHS = 5
 MAX_LEN = 350
 SEQUENCE_LEN = 4
 BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
@@ -223,7 +223,7 @@ class Model(nn.Module):
         return h0, c0
 
 #--------------MODEL FUNCTIONS----------------
-def train(train_dataset, val_dataset, model, batch_size, max_epochs):
+def train(train_dataset, val_dataset, model, batch_size, max_epochs, seq_len):
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
     criterion = nn.CrossEntropyLoss()
@@ -243,7 +243,7 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs):
             Y = batch[1].to(device)
             y_pred, (state_h, state_c) = model(X, (state_h, state_c))
             # loss = criterion(y_pred.transpose(1, 2), Y)
-            loss = criterion(y_pred, Y.float())
+            loss = seq_len * criterion(y_pred, Y.float())
             state_h = state_h.detach()
             state_c = state_c.detach()
             loss.backward()
@@ -276,24 +276,11 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs):
             torch.save(model.state_dict(), "model_1.pt")
             print('model saved!')
 
-# def predict(dataset, model, text, next_words=100):
-#     model.eval()
-#     words = text.split(' ')
-#     state_h, state_c = model.init_hidden(len(words))
-#     for i in range(0, next_words):
-#         x = torch.tensor([[dataset.word_to_index[w] for w in words[i:]]])
-#         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
-#         last_word_logits = y_pred[0][-1]
-#         p = torch.nn.functional.softmax(last_word_logits, dim=0).detach().numpy()
-#         word_index = np.random.choice(len(last_word_logits), p=p)
-#         words.append(dataset.index_to_word[word_index])
-#     return words
-
 #---------LOAD DATA--------------------
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:750]
+df_copy = df.iloc[0:500]
 
 # create word dictionary for all datasets
 words = load_words(df_copy)
@@ -305,6 +292,11 @@ embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_ind
 train_, test_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
 train_, val_ = train_test_split(train_, train_size=0.8, random_state=SEED)
 
+# export datasets
+train_.to_csv('train_data_m1.csv')
+val_.to_csv('val_data_m1.csv')
+test_.to_csv('test_data_m1.csv')
+
 #-------------MODEL PREP----------------
 train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
 val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
@@ -312,4 +304,4 @@ test_dataset = Dataset(dataframe=test_, sequence_length=SEQUENCE_LEN, tokenizer=
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix).to(device)
 
 #------------MODEL TRAIN----------------
-train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS)
+train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)

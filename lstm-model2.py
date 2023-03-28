@@ -7,8 +7,8 @@ import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
-from tqdm import tqdm, trange
-
+from tqdm import tqdm
+import numpy as np
 
 SEED = 48
 random.seed(48)
@@ -25,14 +25,14 @@ def pack_tensor(new_tensor, packed_tensor, max_seq_len):
 
 # define classes
 class SongLyrics(Dataset):
-    def __init__(self, control_code, truncate=False, gpt2_type="gpt2", max_length=1024):
+    def __init__(self, lyric_list,  tokenizer, truncate=False, max_length=1024):
 
-        self.tokenizer = GPT2Tokenizer.from_pretrained(gpt2_type)
+        self.tokenizer = tokenizer
         self.lyrics = []
 
-        for row in df['Lyric']:
+        for row in lyric_list:
             self.lyrics.append(torch.tensor(
-                self.tokenizer.encode(f"<|{control_code}|>{row[:max_length]}<|endoftext|>")
+                self.tokenizer.encode(f"{row[:max_length]}<|endoftext|>")
             ))
         if truncate:
             self.lyrics = self.lyrics[:20000]
@@ -45,15 +45,12 @@ class SongLyrics(Dataset):
         return self.lyrics[item]
 
 def train(
-    dataset, model, tokenizer,
+    dataset, model,
     batch_size=16, epochs=5, lr=2e-5,
-    max_seq_len=400, warmup_steps=200,
-    gpt2_type="gpt2", output_dir=".", output_prefix="wreckgar",
-    test_mode=False,save_model_on_epoch=False,
-):
+    warmup_steps=200):
     acc_steps = 100
-    device=torch.device("cuda")
-    model = model.cuda()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
     model.train()
 
     optimizer = AdamW(model.parameters(), lr=lr)
@@ -62,14 +59,13 @@ def train(
     )
 
     train_dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-    loss=0
+    train_loss = []
     accumulating_batch_count = 0
     input_tensor = None
 
     for epoch in range(epochs):
-
         print(f"Training epoch {epoch}")
-        print(loss)
+        epoch_losses = []
         for idx, entry in tqdm(enumerate(train_dataloader)):
             (input_tensor, carry_on, remainder) = pack_tensor(entry, input_tensor, 768)
 
@@ -80,6 +76,8 @@ def train(
             outputs = model(input_tensor, labels=input_tensor)
             loss = outputs[0]
             loss.backward()
+            epoch_losses.append(loss.item())
+            #print(loss.item())
 
             if (accumulating_batch_count % batch_size) == 0:
                 optimizer.step()
@@ -89,92 +87,25 @@ def train(
 
             accumulating_batch_count += 1
             input_tensor = None
-        if save_model_on_epoch:
-            torch.save(
-                model.state_dict(),
-                os.path.join(output_dir, f"{output_prefix}-{epoch}.pt"),
-            )
+        epoch_train_loss = np.mean(epoch_losses)
+        print(f'epoch train loss: {epoch_train_loss}')
+        train_loss.append(epoch_train_loss)
+        best_train_loss = max(train_loss)
+        if epoch_train_loss <= best_train_loss:
+            torch.save(model.state_dict(), "model_2.pt")
+            print('model saved!')
     return model
-
-
-def generate(
-        model,
-        tokenizer,
-        prompt,
-        entry_count=10,
-        entry_length=30,  # maximum number of words
-        top_p=0.8,
-        temperature=1.,
-):
-    model.eval()
-    generated_num = 0
-    generated_list = []
-
-    filter_value = -float("Inf")
-
-    with torch.no_grad():
-
-        for entry_idx in trange(entry_count):
-
-            entry_finished = False
-            generated = torch.tensor(tokenizer.encode(prompt)).unsqueeze(0)
-
-            for i in range(entry_length):
-                outputs = model(generated, labels=generated)
-                loss, logits = outputs[:2]
-                logits = logits[:, -1, :] / (temperature if temperature > 0 else 1.0)
-
-                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
-                                                    ..., :-1
-                                                    ].clone()
-                sorted_indices_to_remove[..., 0] = 0
-
-                indices_to_remove = sorted_indices[sorted_indices_to_remove]
-                logits[:, indices_to_remove] = filter_value
-
-                next_token = torch.multinomial(F.softmax(logits, dim=-1), num_samples=1)
-                generated = torch.cat((generated, next_token), dim=1)
-
-                if next_token in tokenizer.encode("<|endoftext|>"):
-                    entry_finished = True
-
-                if entry_finished:
-                    generated_num = generated_num + 1
-
-                    output_list = list(generated.squeeze().numpy())
-                    output_text = tokenizer.decode(output_list)
-                    generated_list.append(output_text)
-                    break
-
-            if not entry_finished:
-                output_list = list(generated.squeeze().numpy())
-                output_text = f"{tokenizer.decode(output_list)}<|endoftext|>"
-                generated_list.append(output_text)
-
-    return generated_list
-
-
-# Function to generate multiple sentences. Test data should be a dataframe
-def text_generation(test_data):
-    generated_lyrics = []
-    for i in range(len(test_data)):
-        x = generate(model.to('cpu'), tokenizer, test_data['Lyric'][i], entry_count=1)
-        generated_lyrics.append(x)
-    return generated_lyrics
-
-
-# Run the functions to generate the lyrics
-generated_lyrics = text_generation(test_set)
 
 #Get the tokenizer and model
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+new_tokens = ['<newline>', '<verse>', '<chorus>', '<prechorus>', '<bridge>', '<outro>', '<intro>', '<refrain>', '<hook>', '<postchorus>', '<other>']
+tokenizer.add_special_tokens({'additional_special_tokens': new_tokens}) # add tokens for verses
 model = GPT2LMHeadModel.from_pretrained('gpt2')
+model.resize_token_embeddings(len(tokenizer)) # resize embeddings for added special tokens
+unk_tok_emb = model.transformer.wte.weight.data[tokenizer.unk_token_id, :] # get embedding for unknown token
+for i in range(len(new_tokens)): # initially apply that to all new tokens
+        model.transformer.wte.weight.data[-(i+1), :] = unk_tok_emb
 
-#Accumulated batch size (since GPT2 is so big)
 # load data
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
@@ -184,35 +115,18 @@ df_copy.reset_index(drop=True, inplace=True)
 train_, test_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
 train_, val_ = train_test_split(train_, train_size=0.8, random_state=SEED)
 
-#For the test set only, keep last 20 words in a new column, then remove them from original column
-test_['True_end_lyrics'] = test_['Lyric'].str.split().str[-20:].apply(' '.join)
-test_['lyrics'] = test_['lyrics'].str.split().str[:-20].apply(' '.join)
+# export datasets
+train_.to_csv('train_data_m2.csv')
+val_.to_csv('val_data_m2.csv')
+test_.to_csv('test_data_m2.csv')
+
+train_.reset_index(drop=True, inplace=True)
+val_.reset_index(drop=True, inplace=True)
 
 # create datasets
-train_dataset = SongLyrics(train_['lyrics'], truncate=True, gpt2_type="gpt2")
-val_dataset = SongLyrics(val_['lyrics'], truncate=True, gpt2_type="gpt2")
+train_dataset = SongLyrics(train_['lyrics'], truncate=True, tokenizer=tokenizer)
+val_dataset = SongLyrics(val_['lyrics'], truncate=True, tokenizer=tokenizer)
 
 # train model
-model = train(train_dataset, model, tokenizer)
+model = train(train_dataset, model)
 
-# generate on test set
-#Loop to keep only generated text and add it as a new column in the dataframe
-my_generations=[]
-
-for i in range(len(generated_lyrics)):
-  a = test_['lyrics'][i].split()[-30:] #Get the matching string we want (30 words)
-  b = ' '.join(a)
-  c = ' '.join(generated_lyrics[i]) #Get all that comes after the matching string
-  my_generations.append(c.split(b)[-1])
-
-test_['Generated_lyrics'] = my_generations
-
-
-#Finish the sentences when there is a point, remove after that
-final=[]
-
-for i in range(len(test_)):
-  to_remove = test_['Generated_lyrics'][i].split('.')[-1]
-  final.append(test_['Generated_lyrics'][i].replace(to_remove,''))
-
-test_['Generated_lyrics'] = final

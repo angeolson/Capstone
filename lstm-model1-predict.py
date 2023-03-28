@@ -113,7 +113,7 @@ def get_uniq_words(words):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:750]
+df_copy = df.iloc[0:500]
 
 # create word dictionary for all datasets
 all_words = load_words(df_copy)
