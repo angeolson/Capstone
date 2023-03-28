@@ -45,19 +45,33 @@ contraction_dict = {"ain't": "is not", "aren't": "are not", "can't": "cannot", "
                     "y'all've": "you all have", "you'd": "you would", "you'd've": "you would have",
                     "you'll": "you will", "you'll've": "you will have", "you're": "you are", "you've": "you have"}
 
+reverse_typedict = {'<verse>': '<SONGBREAK>',
+            '<chorus>': '<SONGBREAK>',
+            '<prechorus>': '<SONGBREAK>',
+            '<bridge>': '<SONGBREAK>',
+            '<outro>': '<SONGBREAK>',
+            '<intro>': '<SONGBREAK>',
+            '<refrain>': '<SONGBREAK>',
+            '<hook>': '<SONGBREAK>',
+            # 'instrumental': '<INSTRUMENTAL>',
+            '<postchorus>': '<SONGBREAK>',
+            '<other>': '<SONGBREAK>'
+}
 
-def _get_contractions(contraction_dict):
-    contraction_re = re.compile('(%s)' % '|'.join(contraction_dict.keys()))
-    return contraction_dict, contraction_re
+
+def _get_fromdict(dict):
+    re_ = re.compile('(%s)' % '|'.join(dict.keys()))
+    return dict, re_
 
 
-contractions, contractions_re = _get_contractions(contraction_dict)
+contractions, contractions_re = _get_fromdict(contraction_dict)
+songbreaks, songbreaks_re = _get_fromdict(reverse_typedict)
 
-def replace_contractions(text):
+def replace_fromdict(text, dict, re_):
     def replace(match):
-        return contractions[match.group(0)]
+        return dict[match.group(0)]
 
-    return contractions_re.sub(replace, text)
+    return re_.sub(replace, text)
 
 
 df = pd.read_csv('df_EDA.csv', index_col=0)
@@ -69,7 +83,8 @@ def cleanVerses(verses):
     verses = [item.lower() for item in verses]
     verses = [item for item in verses if item not in punctuation_spaces]
     lyrics = " ".join(verses)
-    lyrics= replace_contractions(lyrics)
+    lyrics = replace_fromdict(lyrics, contractions, contractions_re)
+    lyrics= replace_fromdict(lyrics, songbreaks, songbreaks_re)
     return lyrics
 
 df['lyrics'] = df['verses_transformed'].apply(cleanVerses)

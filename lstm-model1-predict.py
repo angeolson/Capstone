@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from collections import Counter
 import numpy as np
 import random
+import torch.nn.functional as F
 
 SEED = 48
 random.seed(48)
@@ -89,14 +90,25 @@ def predict(word_to_index, index_to_word, model, text, next_words=250):
     for i in range(0, next_words):
         x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
-        last_word_logits = y_pred[0][-1]
-        softmax = nn.Softmax(dim=0)
-        word_softmax = softmax(last_word_logits)
-        #p = last_word_logits.detach().cpu().numpy()
-        p = word_softmax.detach().cpu().numpy()
-        word_index = np.random.choice(len(last_word_logits), p=p)
-        words.append(index_to_word[word_index])
-    return words
+        logits = y_pred[0][-1]
+        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+        sorted_logits_prob = F.softmax(sorted_logits, dim=-1)
+        cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
+        sorted_indices_to_keep = cumulative_probs < 0.8
+        keep = sorted_indices[sorted_indices_to_keep]
+        sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
+        if len(sorted_logits_prob_keep) == 0:
+            next_token = 0 # padding token
+        else:
+            next_token_sorted = torch.multinomial(sorted_logits_prob_keep, num_samples=1)
+            next_token = keep[next_token_sorted].detach().cpu().numpy()[0]
+        # softmax = nn.Softmax(dim=0)
+        # word_softmax = softmax(logits)
+        # p = word_softmax.detach().cpu().numpy()
+        # word_index = np.random.choice(len(last_word_logits), p=p)
+        # words.append(index_to_word[word_index])
+        words.append(index_to_word[next_token])
+    return " ".join(words)
 
 def load_words(dataframe):
     text = dataframe['lyrics'].str.cat(sep=' ')
@@ -129,4 +141,4 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
 model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey i love you', next_words=250))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey what are you doing', next_words=250))

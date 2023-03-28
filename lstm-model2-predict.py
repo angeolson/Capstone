@@ -89,8 +89,11 @@ def generate(
 
 #---------LOAD MODEL--------------------
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+new_tokens = ['<newline>', '<verse>', '<chorus>', '<prechorus>', '<bridge>', '<outro>', '<intro>', '<refrain>', '<hook>', '<postchorus>', '<other>']
+tokenizer.add_special_tokens({'additional_special_tokens': new_tokens}) # add tokens for verses
 model = GPT2LMHeadModel.from_pretrained('gpt2')
-model.load_state_dict(torch.load('model_2.pt', map_location=device))
+model.resize_token_embeddings(len(tokenizer)) # resize embeddings for added special tokens
+model.load_state_dict(torch.load('model_2.pt'))
 model = model.to(device)
 
 #---------LOAD TEST DATA--------------------
@@ -116,7 +119,6 @@ for i in range(len(generated_lyrics)):
 
 test_['Generated_lyrics'] = my_generations
 
-
 #Finish the sentences when there is a point, remove after that
 final=[]
 
@@ -124,4 +126,4 @@ for i in range(len(test_)):
   to_remove = test_['Generated_lyrics'][i].split('.')[-1]
   final.append(test_['Generated_lyrics'][i].replace(to_remove,''))
 
-test_['Generated_lyrics'] = final
+test_['Generated_lyrics_other'] = final

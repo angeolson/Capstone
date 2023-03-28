@@ -18,7 +18,7 @@ glove = True
 #---------SET VARS--------------------
 EPOCHS = 5
 MAX_LEN = 350
-SEQUENCE_LEN = 4
+SEQUENCE_LEN = 8
 BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
 
 embedding_dim = 100  # set = 50 for the 50d file, eg.
@@ -93,9 +93,9 @@ class Dataset(torch.utils.data.Dataset):
         # self.embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=self.word_to_index, embedding_dim=embedding_dim)
         self.sequence_length = sequence_length
         self.tokenizer = tokenizer
-        self.batch_size = batch_size
         self.max_len = max_len
         self.inputs, self.targets = self.get_data(self.dataframe)
+        self.batch_size = len(self.inputs) // len(self.dataframe)
 
     # def load_words(self, dataframe):
     #     text = dataframe['lyrics'].str.cat(sep=' ')
@@ -258,7 +258,7 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs, seq_len):
             Y = batch[1].to(device)
             y_pred, (val_state_h, val_state_c) = model(X, (val_state_h, val_state_c))
             # loss = criterion(y_pred.transpose(1, 2), Y)
-            val_loss = criterion(y_pred, Y.float())
+            val_loss = seq_len * criterion(y_pred, Y.float())
             val_state_h = val_state_h.detach()
             val_state_c = val_state_c.detach()
             val_losses.append(val_loss.item())
@@ -280,7 +280,7 @@ def train(train_dataset, val_dataset, model, batch_size, max_epochs, seq_len):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:500]
+# df_copy = df.iloc[0:500]
 
 # create word dictionary for all datasets
 words = load_words(df_copy)
