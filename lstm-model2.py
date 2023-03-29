@@ -45,8 +45,8 @@ class SongLyrics(Dataset):
         return self.lyrics[item]
 
 def train(
-    dataset, model,
-    batch_size=16, epochs=5, lr=2e-5,
+    train_dataset, val_dataset, model,
+    batch_size=16, epochs=10, lr=2e-5,
     warmup_steps=200):
     acc_steps = 100
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -58,14 +58,17 @@ def train(
         optimizer, num_warmup_steps=warmup_steps, num_training_steps=-1
     )
 
-    train_dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True)
     train_loss = []
+    val_loss = []
     accumulating_batch_count = 0
     input_tensor = None
 
     for epoch in range(epochs):
         print(f"Training epoch {epoch}")
-        epoch_losses = []
+        epoch_train_losses = []
+        epoch_val_losses = []
         for idx, entry in tqdm(enumerate(train_dataloader)):
             (input_tensor, carry_on, remainder) = pack_tensor(entry, input_tensor, 768)
 
@@ -76,7 +79,7 @@ def train(
             outputs = model(input_tensor, labels=input_tensor)
             loss = outputs[0]
             loss.backward()
-            epoch_losses.append(loss.item())
+            epoch_train_losses.append(loss.item())
             #print(loss.item())
 
             if (accumulating_batch_count % batch_size) == 0:
@@ -87,18 +90,39 @@ def train(
 
             accumulating_batch_count += 1
             input_tensor = None
-        epoch_train_loss = np.mean(epoch_losses)
+        for idx, entry in tqdm(enumerate(val_dataloader)):
+            (input_tensor, carry_on, remainder) = pack_tensor(entry, input_tensor, 768)
+
+            if carry_on and idx != len(val_dataloader) - 1:
+                continue
+
+            input_tensor = input_tensor.to(device)
+            outputs = model(input_tensor, labels=input_tensor)
+            loss = outputs[0]
+            loss.backward()
+            epoch_val_losses.append(loss.item())
+            #print(loss.item())
+
+            input_tensor = None
+
+        epoch_train_loss = np.mean(epoch_train_losses)
         print(f'epoch train loss: {epoch_train_loss}')
+        epoch_val_loss = np.mean(epoch_val_losses)
+        print(f'epoch val loss: {epoch_val_loss}')
         train_loss.append(epoch_train_loss)
         best_train_loss = max(train_loss)
-        if epoch_train_loss <= best_train_loss:
+        val_loss.append(epoch_val_loss)
+        best_val_loss = max(val_loss)
+
+        if epoch_val_loss <= best_val_loss:
             torch.save(model.state_dict(), "model_2.pt")
             print('model saved!')
     return model
 
 #Get the tokenizer and model
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-new_tokens = ['<newline>', '<verse>', '<chorus>', '<prechorus>', '<bridge>', '<outro>', '<intro>', '<refrain>', '<hook>', '<postchorus>', '<other>']
+# new_tokens = ['<newline>', '<verse>', '<chorus>', '<prechorus>', '<bridge>', '<outro>', '<intro>', '<refrain>', '<hook>', '<postchorus>', '<other>']
+new_tokens = ['<newline>', '<SONGBREAK>']
 tokenizer.add_special_tokens({'additional_special_tokens': new_tokens}) # add tokens for verses
 model = GPT2LMHeadModel.from_pretrained('gpt2')
 model.resize_token_embeddings(len(tokenizer)) # resize embeddings for added special tokens
@@ -128,5 +152,5 @@ train_dataset = SongLyrics(train_['lyrics'], truncate=True, tokenizer=tokenizer)
 val_dataset = SongLyrics(val_['lyrics'], truncate=True, tokenizer=tokenizer)
 
 # train model
-model = train(train_dataset, model)
+model = train(train_dataset, val_dataset, model)
 

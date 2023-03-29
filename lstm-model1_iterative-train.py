@@ -16,12 +16,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 10
+EPOCHS = 5
 MAX_LEN = 350
-SEQUENCE_LEN = 15
+SEQUENCE_LEN = 20
 # BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
 
-embedding_dim = 200  # set = 50 for the 50d file, eg.
+embedding_dim = 100  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
 
 
@@ -285,6 +285,7 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
+df_copy = df.iloc[500:1000]
 
 # create word dictionary for all datasets
 words = load_words(df_copy)
@@ -292,15 +293,13 @@ uniq_words = get_uniq_words(words)
 word_to_index = {word: index for index, word in enumerate(uniq_words)}
 embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_index, embedding_dim=embedding_dim)
 
-#truncate
-df_copy = df.iloc[0:250]
-
 # split data
 train_, val_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
 
 # export datasets
-train_.to_csv('train_data_m1.csv')
-val_.to_csv('val_data_m1.csv')
+# train_.to_csv('train_data_m1.csv')
+# val_.to_csv('val_data_m1.csv')
+# test_.to_csv('test_data_m1.csv')
 
 #-------------MODEL PREP----------------
 # train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
@@ -310,6 +309,7 @@ train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenize
 val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
 
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix).to(device)
+model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)

@@ -83,7 +83,7 @@ class Model(nn.Module):
 # -----------HELPER FUNCTIONS------------
 def predict(word_to_index, index_to_word, model, text, next_words=250):
     model.eval()
-    words = ['<NEWSONG>']
+    words = [ ]
     for item in text.split(' '):
         words.append(item)
     state_h, state_c = model.init_hidden(1)

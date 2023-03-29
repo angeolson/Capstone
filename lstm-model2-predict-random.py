@@ -26,7 +26,7 @@ def text_generation(prompt_list):
     songs = []
     if len(prompt_list) > 1:
         for i in range(len(prompt_list)):
-            prompt = '<newline> <intro>' + prompt_list[i]
+            prompt = prompt_list[i]
             song = generate(model.to('cpu'), tokenizer, prompt)
             songs.append(song)
         return songs
@@ -94,7 +94,8 @@ def generate(
 
 #---------LOAD MODEL--------------------
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-new_tokens = ['<newline>', '<verse>', '<chorus>', '<prechorus>', '<bridge>', '<outro>', '<intro>', '<refrain>', '<hook>', '<postchorus>', '<other>']
+# new_tokens = ['<newline>', '<verse>', '<chorus>', '<prechorus>', '<bridge>', '<outro>', '<intro>', '<refrain>', '<hook>', '<postchorus>', '<other>']
+new_tokens = ['<newline>', '<SONGBREAK>']
 tokenizer.add_special_tokens({'additional_special_tokens': new_tokens}) # add tokens for verses
 model = GPT2LMHeadModel.from_pretrained('gpt2')
 model.resize_token_embeddings(len(tokenizer)) # resize embeddings for added special tokens
@@ -102,4 +103,5 @@ model.load_state_dict(torch.load('model_2.pt'))
 model = model.to(device)
 
 
-song = text_generation(['stuck in circles'])
+songs = text_generation(['here i am thinking about you', 'hey what do you know', 'cold dark days are ahead', "i'm not thinking about"])
+print(songs)
