@@ -1,5 +1,3 @@
-# Initial Model based on tutorial from https://closeheat.com/blog/pytorch-lstm-text-generation-tutorial
-
 # imports
 import pandas as pd
 import torch
@@ -9,6 +7,7 @@ from collections import Counter
 import numpy as np
 import random
 from sklearn.model_selection import train_test_split
+from transformers import GPT2Tokenizer, GPT2Model, AdamW, get_linear_schedule_with_warmup
 
 
 SEED = 48
@@ -81,42 +80,23 @@ class Dataset(torch.utils.data.Dataset):
         dataframe,
         sequence_length,
         tokenizer,
-        # batch_size,
         max_len,
-        words,
-        uniq_words,
-        single_token_output
+        single_token_output,
+        gpt
     ):
         self.dataframe = dataframe
         self.single_token_output = single_token_output
-        # self.words = self.load_words(self.dataframe)
-        # self.uniq_words = self.get_uniq_words()
-        self.uniq_words = uniq_words
-        self.words = words
-        self.index_to_word = {index: word for index, word in enumerate(self.uniq_words)}
-        self.word_to_index = {word: index for index, word in enumerate(self.uniq_words)}
-        self.words_indexes = [self.word_to_index[w] for w in self.words]
-        # self.embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=self.word_to_index, embedding_dim=embedding_dim)
         self.sequence_length = sequence_length
         self.tokenizer = tokenizer
         self.max_len = max_len
         self.inputs, self.targets = self.get_data(self.dataframe)
         self.batch_size = len(self.inputs) // len(self.dataframe)
-
-
-    # def load_words(self, dataframe):
-    #     text = dataframe['lyrics'].str.cat(sep=' ')
-    #     return text.split(' ')
-    # def get_uniq_words(self):
-    #     word_counts = Counter(self.words)
-    #     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    #     unique_words_padding = ['PAD'] + unique_words
-    #     return unique_words_padding
+        self.gpt = gpt
 
     def __len__(self):
         return len(self.inputs)
 
-    def build_sequences(self, text, word_to_index, sequence_length, max_len, single_token_output=True):
+    def build_sequences(self, text, sequence_length, max_len, single_token_output=True):
         '''
         adapted from https://gist.github.com/FernandoLpz/acaeb5fe714d084c0fe08481fdaa08b7#file-build_sequences-py
         :param text:
@@ -129,23 +109,22 @@ class Dataset(torch.utils.data.Dataset):
         text_length = len(text)
         if text_length < max_len:
             for i in range(max_len-text_length):
-                text.append('PAD')
+                text.append('<PAD>')
         for i in range(max_len - (sequence_length + 1)):
             # try:
             # Get window of chars from text
             # Then, transform it into its idx representation
             sequence = text[i:i + sequence_length]
-            sequence = [word_to_index[char] for char in sequence]
-
+            sequence = self.tokenizer.encode(sequence)
             # Get word target
             # Then, transform it into its idx representation
 
             if single_token_output is True:
                 target = text[i + 1 + sequence_length]
-                target = word_to_index[target]
+                target = self.tokenizer.encode(target)
             else:
                 target = text[i+1: i + 1 + sequence_length] # longer than +1 token out
-                target = [word_to_index[char] for char in target]
+                target = self.tokenizer.encode(target)
 
 
             # Save sequences and targets
@@ -168,9 +147,9 @@ class Dataset(torch.utils.data.Dataset):
 
         for i in range(len(dataframe)):
             # input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
-            input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
+            input = dataframe.iloc[i]['lyrics']
             tokenized_input = self.tokenizer(input)
-            x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
+            x, y = self.build_sequences(text=tokenized_input,
                                         sequence_length=self.sequence_length, max_len=self.max_len, single_token_output=self.single_token_output)
             X.append(x)
             Y.append(y)
@@ -188,27 +167,18 @@ class Dataset(torch.utils.data.Dataset):
             index = index.tolist()
         x = self.inputs[index]
         y = self.targets[index]
-        y = self.to_categorical(y=y, num_classes=len(self.uniq_words)) # equiv to n_vocab
+        y = self.to_categorical(y=y, num_classes=self.gpt.wte.num_embeddings) # equiv to n_vocab
         return torch.tensor(x), torch.tensor(y)
 
 class Model(nn.Module):
-    def __init__(self, uniq_words, max_len, embedding_dim, embedding_matrix, single_token_output=True):
+    def __init__(self, max_len, gpt, hidden_dim, no_layers, single_token_output=True):
         super(Model, self).__init__()
-        self.hidden_dim = 128
-        self.embedding_dim = embedding_dim
-        self.num_layers = 4
-        # n_vocab = len(dataset.uniq_words)
-        # self.max_len = dataset.max_len
-        n_vocab = len(uniq_words)
+        self.gpt = gpt
+        self.hidden_dim = hidden_dim
+        self.embedding_dim = gpt2.config.to_dict()['n_embd']
+        self.num_layers = no_layers
+        self.n_vocab = gpt2.wte.num_embeddings
         self.max_len = max_len
-        if glove is True:
-            self.embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embedding_matrix), padding_idx=0)
-        else:
-            self.embedding = nn.Embedding(
-            num_embeddings=n_vocab,
-            embedding_dim=self.embedding_dim,
-            padding_idx=0
-        )
         self.lstm = nn.LSTM(
             input_size=self.embedding_dim,
             hidden_size=self.hidden_dim,
@@ -216,13 +186,13 @@ class Model(nn.Module):
             dropout=0.2,
             batch_first=True
         )
-        self.fc = nn.Linear(self.hidden_dim, n_vocab)
+        self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
         self.softmax = nn.Softmax(dim=1)
         self.softmax2d = nn.Softmax2d()
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden):
-        embed = self.embedding(x)
+        embed = self.gpt(input_ids=x)[0]
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
         if self.single_token_output is True:
@@ -316,13 +286,21 @@ train_.to_csv(f'train_data_m1_{DF_TRUNCATE_UB}.csv')
 val_.to_csv(f'val_data_m1_{DF_TRUNCATE_UB}.csv')
 
 #-------------MODEL PREP----------------
-# train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
-# val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
-# test_dataset = Dataset(dataframe=test_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
-train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words, single_token_output=single_token_output)
-val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words, single_token_output=single_token_output)
+tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+gpt2 = GPT2Model.from_pretrained('gpt2')
 
-model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix, single_token_output=single_token_output).to(device)
+# add new tokens to tokenizer
+new_tokens = ['<newline>', '<SONGBREAK>', '<PAD>']
+tokenizer.add_special_tokens({'additional_special_tokens': new_tokens}) # add tokens for verses
+gpt2.resize_token_embeddings(len(tokenizer)) # resize embeddings for added special tokens
+unk_tok_emb = gpt2.wte.weight.data[tokenizer.unk_token_id, :] # get embedding for unknown token
+for i in range(len(new_tokens)): # initially apply that to all new tokens
+        gpt2.wte.weight.data[-(i+1), :] = unk_tok_emb
+
+train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2)
+val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2)
+
+model = Model(max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2, hidden_dim=128).to(device)
 if Iterative_Train is True:
     model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
