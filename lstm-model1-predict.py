@@ -12,10 +12,11 @@ SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 MAX_LEN = 350
-glove = True
+glove = False
 
-embedding_dim = 100  # set = 50 for the 50d file, eg.
+embedding_dim = 200  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
+single_token_output=True
 
 #----HELPER FUNCTIONS-------
 def embedding_for_vocab(filepath, word_index,
@@ -38,11 +39,11 @@ def embedding_for_vocab(filepath, word_index,
 
 #--------MODEL DEFINITION-------------
 class Model(nn.Module):
-    def __init__(self, uniq_words, max_len):
+    def __init__(self, uniq_words, max_len, embedding_dim, embedding_matrix, single_token_output=True):
         super(Model, self).__init__()
         self.hidden_dim = 128
-        self.embedding_dim = 100
-        self.num_layers = 3
+        self.embedding_dim = embedding_dim
+        self.num_layers = 4
         # n_vocab = len(dataset.uniq_words)
         # self.max_len = dataset.max_len
         n_vocab = len(uniq_words)
@@ -63,15 +64,16 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        #self.softmax = nn.Softmax(dim=1)
-        self.softmax = nn.Softmax2d()
+        self.softmax = nn.Softmax(dim=1)
+        self.softmax2d = nn.Softmax2d()
+        self.single_token_output = single_token_output
 
     def forward(self, x, hidden):
-        # batch_size = x.size(0)
         embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
-        #out = out[:, -1, :] # keeps only last subtensor tensor; likely want to use attention mechanism to create linear combo of all
+        if self.single_token_output is True:
+            out = out[:, -1, :] # keeps only last logits, i.e. logits associated with the last word we want to predict
         #out = self.softmax(out)
         return out, hidden
 
@@ -81,7 +83,7 @@ class Model(nn.Module):
         return h0, c0
 
 # -----------HELPER FUNCTIONS------------
-def predict(word_to_index, index_to_word, model, text, next_words=250):
+def predict(word_to_index, index_to_word, model, text, single_token_output, next_words=250, ):
     model.eval()
     words = [ ]
     for item in text.split(' '):
@@ -90,7 +92,10 @@ def predict(word_to_index, index_to_word, model, text, next_words=250):
     for i in range(0, next_words):
         x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
-        logits = y_pred[0][-1]
+        if single_token_output is True:
+            logits = y_pred[0]
+        else:
+            logits = y_pred[0][-1]
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
         sorted_logits_prob = F.softmax(sorted_logits, dim=-1)
         cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
@@ -125,7 +130,6 @@ def get_uniq_words(words):
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-df_copy = df.iloc[0:500]
 
 # create word dictionary for all datasets
 all_words = load_words(df_copy)
@@ -137,8 +141,8 @@ words_indexes = [word_to_index[w] for w in all_words]
 embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_index, embedding_dim=embedding_dim)
 
 #---------LOAD MODEL--------------------
-model = Model(uniq_words=uniq_words, max_len=MAX_LEN).to(device)
+model = Model(uniq_words=uniq_words, max_len=MAX_LEN, single_token_output=single_token_output, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix).to(device)
 model.load_state_dict(torch.load('model_1.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey what are you doing', next_words=250))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey what are you doing', next_words=250, single_token_output=single_token_output))

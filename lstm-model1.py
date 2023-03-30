@@ -23,7 +23,7 @@ SEQUENCE_LEN = 8
 DF_TRUNCATE_LB = 0 # lower bound to truncate data
 DF_TRUNCATE_UB = 250 # upper bound to truncate data
 Iterative_Train = False # False if training model from scratch, True if fine-tuning
-single_token_output = True # True if only want to look at last word logits
+single_token_output = False # True if only want to look at last word logits
 # BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
@@ -51,7 +51,7 @@ def load_words(dataframe):
 def get_uniq_words(words):
     word_counts = Counter(words)
     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    unique_words_padding = ['PAD', '<NEWSONG>'] + unique_words
+    unique_words_padding = ['<PAD>'] + unique_words
     return unique_words_padding
 
 # code for embedding function adapted from https://www.geeksforgeeks.org/pre-trained-word-embedding-using-glove-in-nlp-models/
@@ -129,7 +129,7 @@ class Dataset(torch.utils.data.Dataset):
         text_length = len(text)
         if text_length < max_len:
             for i in range(max_len-text_length):
-                text.append('PAD')
+                text.append('<PAD>')
         for i in range(max_len - (sequence_length + 1)):
             # try:
             # Get window of chars from text
@@ -168,7 +168,7 @@ class Dataset(torch.utils.data.Dataset):
 
         for i in range(len(dataframe)):
             # input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
-            input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
+            input = dataframe.iloc[i]['lyrics']
             tokenized_input = self.tokenizer(input)
             x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
                                         sequence_length=self.sequence_length, max_len=self.max_len, single_token_output=self.single_token_output)
