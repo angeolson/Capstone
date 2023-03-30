@@ -17,8 +17,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 10
-MAX_LEN = 350
+EPOCHS = 5
+MAX_LEN = 300
 SEQUENCE_LEN = 8
 DF_TRUNCATE_LB = 0 # lower bound to truncate data
 DF_TRUNCATE_UB = 250 # upper bound to truncate data
@@ -291,7 +291,10 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
         best_loss = max(all_loss)
         if epoch_val_loss <= best_loss:
-            torch.save(model.state_dict(), "model_1.pt")
+            if Iterative_Train is False:
+                torch.save(model.state_dict(), f"model_1_{single_token_output}.pt")
+            else:
+                torch.save(model.state_dict(), f"model_1_{single_token_output}_{DF_TRUNCATE_UB}.pt")
             print('model saved!')
 
 #---------LOAD DATA--------------------
@@ -324,7 +327,7 @@ val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=to
 
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix, single_token_output=single_token_output).to(device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load('model_1.pt', map_location=device))
+    model.load_state_dict(torch.load(f'model_1_{single_token_output}', map_location=device))
 
 #------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)

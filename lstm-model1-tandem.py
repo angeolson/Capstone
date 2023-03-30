@@ -1,3 +1,5 @@
+# Initial Model based on tutorial from https://closeheat.com/blog/pytorch-lstm-text-generation-tutorial
+
 # imports
 import pandas as pd
 import torch
@@ -7,7 +9,6 @@ from collections import Counter
 import numpy as np
 import random
 from sklearn.model_selection import train_test_split
-from transformers import GPT2Tokenizer, GPT2Model, AdamW, get_linear_schedule_with_warmup
 
 
 SEED = 48
@@ -16,16 +17,19 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 10
-MAX_LEN = 350
+EPOCHS = 5
+MAX_LEN = 300
 SEQUENCE_LEN = 8
 DF_TRUNCATE_LB = 0 # lower bound to truncate data
 DF_TRUNCATE_UB = 250 # upper bound to truncate data
 Iterative_Train = False # False if training model from scratch, True if fine-tuning
-single_token_output = False # True if only want to look at last word logits
+single_token_output = True # True if only want to look at last word logits
 # BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
+filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
+
+
 
 # -----------HELPER FUNCTIONS------------
 def cleanData(df):
@@ -38,9 +42,36 @@ def cleanData(df):
         df[col] = df[col].apply(lambda x:eval(x, {'__builtins__': None}, {}))
     return df
 
+def tokenizer(x):
+    return x.split(" ")
+
 def load_words(dataframe):
     text = dataframe['lyrics'].str.cat(sep=' ')
     return text.split(' ')
+def get_uniq_words(words):
+    word_counts = Counter(words)
+    unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
+    unique_words_padding = ['<PAD>'] + unique_words
+    return unique_words_padding
+
+# code for embedding function adapted from https://www.geeksforgeeks.org/pre-trained-word-embedding-using-glove-in-nlp-models/
+def embedding_for_vocab(filepath, word_index,
+                        embedding_dim):
+    vocab_size = len(word_index)
+
+    # Adding again 1 because of reserved 0 index
+    embedding_matrix_vocab = np.zeros((vocab_size,
+                                       embedding_dim))
+
+    with open(filepath, encoding="utf8") as f:
+        for line in f:
+            word, *vector = line.split()
+            if word in word_index:
+                idx = word_index[word]
+                embedding_matrix_vocab[idx] = np.array(
+                    vector, dtype=np.float32)[:embedding_dim]
+
+    return embedding_matrix_vocab
 
 #--------CLASS DEFINITIONS-------------
 
@@ -50,23 +81,42 @@ class Dataset(torch.utils.data.Dataset):
         dataframe,
         sequence_length,
         tokenizer,
+        # batch_size,
         max_len,
-        single_token_output,
-        gpt
+        words,
+        uniq_words,
+        single_token_output
     ):
         self.dataframe = dataframe
         self.single_token_output = single_token_output
+        # self.words = self.load_words(self.dataframe)
+        # self.uniq_words = self.get_uniq_words()
+        self.uniq_words = uniq_words
+        self.words = words
+        self.index_to_word = {index: word for index, word in enumerate(self.uniq_words)}
+        self.word_to_index = {word: index for index, word in enumerate(self.uniq_words)}
+        self.words_indexes = [self.word_to_index[w] for w in self.words]
+        # self.embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=self.word_to_index, embedding_dim=embedding_dim)
         self.sequence_length = sequence_length
         self.tokenizer = tokenizer
         self.max_len = max_len
         self.inputs, self.targets = self.get_data(self.dataframe)
         self.batch_size = len(self.inputs) // len(self.dataframe)
-        self.gpt = gpt
+
+
+    # def load_words(self, dataframe):
+    #     text = dataframe['lyrics'].str.cat(sep=' ')
+    #     return text.split(' ')
+    # def get_uniq_words(self):
+    #     word_counts = Counter(self.words)
+    #     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
+    #     unique_words_padding = ['PAD'] + unique_words
+    #     return unique_words_padding
 
     def __len__(self):
         return len(self.inputs)
 
-    def build_sequences(self, text, sequence_length, max_len, single_token_output=True):
+    def build_sequences(self, text, word_to_index, sequence_length, max_len, single_token_output=True):
         '''
         adapted from https://gist.github.com/FernandoLpz/acaeb5fe714d084c0fe08481fdaa08b7#file-build_sequences-py
         :param text:
@@ -80,20 +130,23 @@ class Dataset(torch.utils.data.Dataset):
         if text_length < max_len:
             for i in range(max_len-text_length):
                 text.append('<PAD>')
-        text = " ".join(text)
-        encoded_text = self.tokenizer.encode(text)
         for i in range(max_len - (sequence_length + 1)):
             # try:
             # Get window of chars from text
             # Then, transform it into its idx representation
-            sequence = encoded_text[i:i + sequence_length]
+            sequence = text[i:i + sequence_length]
+            sequence = [word_to_index[char] for char in sequence]
+
             # Get word target
             # Then, transform it into its idx representation
 
             if single_token_output is True:
-                target = encoded_text[i + 1 + sequence_length]
+                target = text[i + 1 + sequence_length]
+                target = word_to_index[target]
             else:
-                target = encoded_text[i+1: i + 1 + sequence_length] # longer than +1 token ou
+                target = text[i+1: i + 1 + sequence_length] # longer than +1 token out
+                target = [word_to_index[char] for char in target]
+
 
             # Save sequences and targets
             x.append(sequence)
@@ -116,8 +169,8 @@ class Dataset(torch.utils.data.Dataset):
         for i in range(len(dataframe)):
             # input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
             input = dataframe.iloc[i]['lyrics']
-            tokenized_input = input.split(" ")
-            x, y = self.build_sequences(text=tokenized_input,
+            tokenized_input = self.tokenizer(input)
+            x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
                                         sequence_length=self.sequence_length, max_len=self.max_len, single_token_output=self.single_token_output)
             X.append(x)
             Y.append(y)
@@ -135,18 +188,27 @@ class Dataset(torch.utils.data.Dataset):
             index = index.tolist()
         x = self.inputs[index]
         y = self.targets[index]
-        y = self.to_categorical(y=y, num_classes=self.gpt.wte.num_embeddings) # equiv to n_vocab
+        y = self.to_categorical(y=y, num_classes=len(self.uniq_words)) # equiv to n_vocab
         return torch.tensor(x), torch.tensor(y)
 
 class Model(nn.Module):
-    def __init__(self, max_len, gpt, hidden_dim, no_layers, single_token_output=True):
+    def __init__(self, uniq_words, max_len, embedding_dim, embedding_matrix, single_token_output=True):
         super(Model, self).__init__()
-        self.gpt = gpt
-        self.hidden_dim = hidden_dim
-        self.embedding_dim = gpt2.config.to_dict()['n_embd']
-        self.num_layers = no_layers
-        self.n_vocab = gpt2.wte.num_embeddings
+        self.hidden_dim = 128
+        self.embedding_dim = embedding_dim
+        self.num_layers = 4
+        # n_vocab = len(dataset.uniq_words)
+        # self.max_len = dataset.max_len
+        n_vocab = len(uniq_words)
         self.max_len = max_len
+        if glove is True:
+            self.embedding = nn.Embedding.from_pretrained(torch.FloatTensor(embedding_matrix), padding_idx=0)
+        else:
+            self.embedding = nn.Embedding(
+            num_embeddings=n_vocab,
+            embedding_dim=self.embedding_dim,
+            padding_idx=0
+        )
         self.lstm = nn.LSTM(
             input_size=self.embedding_dim,
             hidden_size=self.hidden_dim,
@@ -154,13 +216,13 @@ class Model(nn.Module):
             dropout=0.2,
             batch_first=True
         )
-        self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
+        self.fc = nn.Linear(self.hidden_dim, n_vocab)
         self.softmax = nn.Softmax(dim=1)
         self.softmax2d = nn.Softmax2d()
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden):
-        embed = self.gpt(input_ids=x)[0]
+        embed = self.embedding(x)
         output, hidden = self.lstm(embed, hidden)
         out = self.fc(output)
         if self.single_token_output is True:
@@ -184,7 +246,7 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
     val_dataloader = DataLoader(val_dataset, batch_size=train_batch_size, drop_last=True)
     criterion = nn.CrossEntropyLoss()
     #criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.00001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     all_loss = []
     for epoch in range(max_epochs):
         train_losses = []
@@ -193,8 +255,8 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         val_batch_count = 0
         model.train()
         state_h, state_c = model.init_hidden(train_batch_size)
-        optimizer.zero_grad()
         for batch in train_dataloader:
+            optimizer.zero_grad()
             X = batch[0].to(device)
             Y = batch[1].to(device)
             y_pred, (state_h, state_c) = model(X, (state_h, state_c))
@@ -203,11 +265,9 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
             state_h = state_h.detach()
             state_c = state_c.detach()
             loss.backward()
+            optimizer.step()
             train_losses.append(loss.item())
             print({ 'epoch': epoch, 'batch': train_batch_count, 'train loss': loss.item() })
-            if (train_batch_count % 16) == 0:
-                optimizer.step()
-                optimizer.zero_grad()
             train_batch_count += 1
         model.eval()
         val_state_h, val_state_c = model.init_hidden(val_batch_size)
@@ -231,13 +291,22 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
         best_loss = max(all_loss)
         if epoch_val_loss <= best_loss:
-            torch.save(model.state_dict(), "model_3.pt")
+            if Iterative_Train is False:
+                torch.save(model.state_dict(), f"model_1_{single_token_output}.pt")
+            else:
+                torch.save(model.state_dict(), f"model_1_{single_token_output}_{DF_TRUNCATE_UB}.pt")
             print('model saved!')
 
 #---------LOAD DATA--------------------
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
+
+# create word dictionary for all datasets
+words = load_words(df_copy)
+uniq_words = get_uniq_words(words)
+word_to_index = {word: index for index, word in enumerate(uniq_words)}
+embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_index, embedding_dim=embedding_dim)
 
 #truncate
 df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
@@ -246,27 +315,19 @@ df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
 train_, val_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
 
 # export datasets
-train_.to_csv(f'train_data_m3_{DF_TRUNCATE_UB}.csv')
-val_.to_csv(f'val_data_m3_{DF_TRUNCATE_UB}.csv')
+train_.to_csv(f'train_data_m1_{DF_TRUNCATE_UB}.csv')
+val_.to_csv(f'val_data_m1_{DF_TRUNCATE_UB}.csv')
 
 #-------------MODEL PREP----------------
-tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-gpt2 = GPT2Model.from_pretrained('gpt2')
+# train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
+# val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
+# test_dataset = Dataset(dataframe=test_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
+train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words, single_token_output=single_token_output)
+val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words, single_token_output=single_token_output)
 
-# add new tokens to tokenizer
-new_tokens = ['<newline>', '<SONGBREAK>', '<PAD>']
-tokenizer.add_special_tokens({'additional_special_tokens': new_tokens}) # add tokens for verses
-gpt2.resize_token_embeddings(len(tokenizer)) # resize embeddings for added special tokens
-unk_tok_emb = gpt2.wte.weight.data[tokenizer.unk_token_id, :] # get embedding for unknown token
-for i in range(len(new_tokens)): # initially apply that to all new tokens
-        gpt2.wte.weight.data[-(i+1), :] = unk_tok_emb
-
-train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2)
-val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2)
-
-model = Model(max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2, hidden_dim=128, no_layers=4).to(device)
+model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix, single_token_output=single_token_output).to(device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load('model_3.pt', map_location=device))
+    model.load_state_dict(torch.load(f'model_1_{single_token_output}', map_location=device))
 
 #------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)

@@ -11,12 +11,12 @@ import torch.nn.functional as F
 SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-MAX_LEN = 350
+MAX_LEN = 300
 glove = False
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
-single_token_output=True
+single_token_output=False
 
 #----HELPER FUNCTIONS-------
 def embedding_for_vocab(filepath, word_index,
