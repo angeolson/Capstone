@@ -41,36 +41,9 @@ def cleanData(df):
         df[col] = df[col].apply(lambda x:eval(x, {'__builtins__': None}, {}))
     return df
 
-def tokenizer(x):
-    return x.split(" ")
-
 def load_words(dataframe):
     text = dataframe['lyrics'].str.cat(sep=' ')
     return text.split(' ')
-def get_uniq_words(words):
-    word_counts = Counter(words)
-    unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    unique_words_padding = ['PAD', '<NEWSONG>'] + unique_words
-    return unique_words_padding
-
-# code for embedding function adapted from https://www.geeksforgeeks.org/pre-trained-word-embedding-using-glove-in-nlp-models/
-def embedding_for_vocab(filepath, word_index,
-                        embedding_dim):
-    vocab_size = len(word_index)
-
-    # Adding again 1 because of reserved 0 index
-    embedding_matrix_vocab = np.zeros((vocab_size,
-                                       embedding_dim))
-
-    with open(filepath, encoding="utf8") as f:
-        for line in f:
-            word, *vector = line.split()
-            if word in word_index:
-                idx = word_index[word]
-                embedding_matrix_vocab[idx] = np.array(
-                    vector, dtype=np.float32)[:embedding_dim]
-
-    return embedding_matrix_vocab
 
 #--------CLASS DEFINITIONS-------------
 
@@ -110,22 +83,20 @@ class Dataset(torch.utils.data.Dataset):
         if text_length < max_len:
             for i in range(max_len-text_length):
                 text.append('<PAD>')
+        text = " ".join(text)
+        encoded_text = self.tokenizer.encode(text)
         for i in range(max_len - (sequence_length + 1)):
             # try:
             # Get window of chars from text
             # Then, transform it into its idx representation
-            sequence = text[i:i + sequence_length]
-            sequence = self.tokenizer.encode(sequence)
+            sequence = encoded_text[i:i + sequence_length]
             # Get word target
             # Then, transform it into its idx representation
 
             if single_token_output is True:
-                target = text[i + 1 + sequence_length]
-                target = self.tokenizer.encode(target)
+                target = encoded_text[i + 1 + sequence_length]
             else:
-                target = text[i+1: i + 1 + sequence_length] # longer than +1 token out
-                target = self.tokenizer.encode(target)
-
+                target = encoded_text[i+1: i + 1 + sequence_length] # longer than +1 token ou
 
             # Save sequences and targets
             x.append(sequence)
@@ -148,7 +119,7 @@ class Dataset(torch.utils.data.Dataset):
         for i in range(len(dataframe)):
             # input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
             input = dataframe.iloc[i]['lyrics']
-            tokenized_input = self.tokenizer(input)
+            tokenized_input = input.split(" ")
             x, y = self.build_sequences(text=tokenized_input,
                                         sequence_length=self.sequence_length, max_len=self.max_len, single_token_output=self.single_token_output)
             X.append(x)
@@ -225,8 +196,8 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         val_batch_count = 0
         model.train()
         state_h, state_c = model.init_hidden(train_batch_size)
+        optimizer.zero_grad()
         for batch in train_dataloader:
-            optimizer.zero_grad()
             X = batch[0].to(device)
             Y = batch[1].to(device)
             y_pred, (state_h, state_c) = model(X, (state_h, state_c))
@@ -235,9 +206,11 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
             state_h = state_h.detach()
             state_c = state_c.detach()
             loss.backward()
-            optimizer.step()
             train_losses.append(loss.item())
             print({ 'epoch': epoch, 'batch': train_batch_count, 'train loss': loss.item() })
+            if (train_batch_count % 16) == 0:
+                optimizer.step()
+                optimizer.zero_grad()
             train_batch_count += 1
         model.eval()
         val_state_h, val_state_c = model.init_hidden(val_batch_size)
@@ -261,19 +234,13 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
         best_loss = max(all_loss)
         if epoch_val_loss <= best_loss:
-            torch.save(model.state_dict(), "model_1.pt")
+            torch.save(model.state_dict(), "model_3.pt")
             print('model saved!')
 
 #---------LOAD DATA--------------------
 df = pd.read_csv('df_LSTM.csv', index_col=0)
 df_copy = df.copy()
 df_copy.reset_index(drop=True, inplace=True)
-
-# create word dictionary for all datasets
-words = load_words(df_copy)
-uniq_words = get_uniq_words(words)
-word_to_index = {word: index for index, word in enumerate(uniq_words)}
-embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_index, embedding_dim=embedding_dim)
 
 #truncate
 df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
@@ -282,8 +249,8 @@ df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
 train_, val_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
 
 # export datasets
-train_.to_csv(f'train_data_m1_{DF_TRUNCATE_UB}.csv')
-val_.to_csv(f'val_data_m1_{DF_TRUNCATE_UB}.csv')
+train_.to_csv(f'train_data_m3_{DF_TRUNCATE_UB}.csv')
+val_.to_csv(f'val_data_m3_{DF_TRUNCATE_UB}.csv')
 
 #-------------MODEL PREP----------------
 tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
@@ -300,9 +267,9 @@ for i in range(len(new_tokens)): # initially apply that to all new tokens
 train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2)
 val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2)
 
-model = Model(max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2, hidden_dim=128).to(device)
+model = Model(max_len=MAX_LEN, single_token_output=single_token_output, gpt=gpt2, hidden_dim=128, no_layers=4).to(device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load('model_1.pt', map_location=device))
+    model.load_state_dict(torch.load('model_3.pt', map_location=device))
 
 #------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)
