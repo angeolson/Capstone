@@ -20,9 +20,9 @@ glove = True
 EPOCHS = 5
 MAX_LEN = 300
 SEQUENCE_LEN = 8
-DF_TRUNCATE_LB = 0 # lower bound to truncate data
-DF_TRUNCATE_UB = 250 # upper bound to truncate data
-Iterative_Train = False # False if training model from scratch, True if fine-tuning
+DF_TRUNCATE_LB = 2000 # lower bound to truncate data
+DF_TRUNCATE_UB = 2250 # upper bound to truncate data
+Iterative_Train = True # False if training model from scratch, True if fine-tuning
 single_token_output = True # True if only want to look at last word logits
 # BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
 
@@ -289,7 +289,7 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         all_loss.append(epoch_val_loss)
         print(f'Epoch {epoch}')
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
-        best_loss = max(all_loss)
+        best_loss = min(all_loss)
         if epoch_val_loss <= best_loss:
             if Iterative_Train is False:
                 torch.save(model.state_dict(), f"model_1_{single_token_output}.pt")
@@ -327,7 +327,7 @@ val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=to
 
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix, single_token_output=single_token_output).to(device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load(f'model_1_{single_token_output}', map_location=device))
+    model.load_state_dict(torch.load(f'model_1_{single_token_output}_2000.pt', map_location=device))
 
 #------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)

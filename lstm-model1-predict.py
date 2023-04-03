@@ -83,7 +83,7 @@ class Model(nn.Module):
         return h0, c0
 
 # -----------HELPER FUNCTIONS------------
-def predict(word_to_index, index_to_word, model, text, single_token_output, next_words=250, ):
+def predict(word_to_index, index_to_word, model, text, single_token_output, next_words=250):
     model.eval()
     words = [ ]
     for item in text.split(' '):
@@ -122,7 +122,7 @@ def load_words(dataframe):
 def get_uniq_words(words):
     word_counts = Counter(words)
     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    unique_words_padding = ['PAD', '<NEWSONG>'] + unique_words
+    unique_words_padding = ['<PAD>'] + unique_words
     return unique_words_padding
 
 
@@ -142,7 +142,7 @@ embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_ind
 
 #---------LOAD MODEL--------------------
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, single_token_output=single_token_output, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix).to(device)
-model.load_state_dict(torch.load('model_1.pt', map_location=device))
+model.load_state_dict(torch.load(f'model_1_{single_token_output}_750.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text='hey what are you doing', next_words=250, single_token_output=single_token_output))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text="i have been walking in my shadows <newline> where i am walking to i do not know", next_words=250, single_token_output=single_token_output))
