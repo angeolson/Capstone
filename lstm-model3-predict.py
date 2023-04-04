@@ -12,7 +12,7 @@ from transformers import BertTokenizer, BertModel
 SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-MAX_LEN = 300
+MAX_LEN = 350
 glove = False
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
@@ -206,20 +206,22 @@ def generate(
 ):
     model.eval()
 
-    generated_lyrics = prompt
+    generated_lyrics = prompt.split(' ')
 
     with torch.no_grad():
 
         entry_finished = False
         state_h, state_c = model.init_hidden(1)
-        for i in range(entry_length):
+        # for i in range(entry_length):
+        while len(generated_lyrics) < entry_length:
             generated = tokenizer(
-                generated_lyrics,
+                " ".join(generated_lyrics),
                 add_special_tokens=False,
                 return_token_type_ids=False,
                 return_attention_mask=True,
                 truncation=False,
-                padding=True)
+                padding=False,
+                pad_token=0)
             inputs = torch.tensor(generated['input_ids']).to(device)
             inputs = inputs.reshape(1, -1)
             attention_mask = torch.tensor(generated['attention_mask']).to(device)
@@ -236,21 +238,24 @@ def generate(
             keep = sorted_indices[sorted_indices_to_keep]
             sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
             if len(sorted_logits_prob_keep) == 0:
-                next_token = 0  # padding token
+                next_token = [0]  # padding token
             else:
                 next_token_sorted = torch.multinomial(sorted_logits_prob_keep, num_samples=1)
                 next_token = [keep[next_token_sorted].detach().cpu().numpy()[0]]
 
-            generated_lyrics = generated_lyrics + " " + tokenizer.decode(next_token)
+            # generated_lyrics = generated_lyrics + " " + tokenizer.decode(next_token)
+            generated_lyrics.append(tokenizer.decode(next_token))
 
-            if next_token[0] == 101:
+            if tokenizer.decode(next_token) == '[CLS]':
                 entry_finished = True
 
             if entry_finished is True:
                 break
 
-    generated_lyrics = generated_lyrics.replace('[PAD]', '')
-    return generated_lyrics
+    #generated_lyrics = generated_lyrics.replace('[PAD]', '')
+
+    #return generated_lyrics
+    return " ".join([item for item in generated_lyrics if item != '[PAD]'])
 
 #---------LOAD MODEL--------------------
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -269,8 +274,8 @@ for i in range(len(new_tokens)): # initially apply that to all new tokens
 
 model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(device)
 
-model.load_state_dict(torch.load('model_3_250_True.pt', map_location=device))
+model.load_state_dict(torch.load('model_3_500_True.pt', map_location=device))
 
 #------------MODEL RUN-----------------
-song = generate(model=model, prompt="[CLS] i have been walking in my shadows", entry_length=250, single_token_output=single_token_output, tokenizer=tokenizer)
+song = generate(model=model, prompt="what are you doing tonight", entry_length=250, single_token_output=single_token_output, tokenizer=tokenizer)
 print(song)

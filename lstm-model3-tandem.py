@@ -18,7 +18,7 @@ glove = True
 # ---------SET VARS--------------------
 EPOCHS = 5
 MAX_LEN = 350
-SEQUENCE_LEN = 8
+SEQUENCE_LEN = 4
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 250  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
@@ -107,7 +107,7 @@ class Dataset(torch.utils.data.Dataset):
 
             if single_token_output is True:
                 target = text[i + 1 + sequence_length]
-                target = " ".join(target)
+                # target = " ".join(target)
                 encoded_target = self.tokenizer(
                     target,
                     add_special_tokens=False,
@@ -180,8 +180,7 @@ class Dataset(torch.utils.data.Dataset):
         x_attention = self.inputs_attention[index]
         y = self.targets[index]
         y = self.to_categorical(y=y, num_classes=self.bert.config.to_dict()['vocab_size'])  # equiv to n_vocab
-        if self.single_token_output is True:
-            y = y[0]
+        y = y[0]
         return torch.tensor(x), torch.tensor(y), torch.tensor(x_attention)
 
 
@@ -284,12 +283,12 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
         best_loss = min(all_val_loss)
         if epoch_val_loss <= best_loss:
-            torch.save(model.state_dict(), "model_3.pt")
+            torch.save(model.state_dict(), f"model_3_{DF_TRUNCATE_UB}_{single_token_output}_seq4.pt")
             print('model saved!')
     losses_df = pd.DataFrame()
     losses_df['val_loss'] = all_val_loss
     losses_df['train_loss'] = all_train_loss
-    losses_df.to_csv(f'epoch_losses_m3_{DF_TRUNCATE_UB}_{single_token_output}.csv')
+    losses_df.to_csv(f'epoch_losses_m3_{DF_TRUNCATE_UB}_{single_token_output}_seq4.csv')
 
 
 # ---------LOAD DATA--------------------
@@ -304,8 +303,8 @@ df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
 train_, val_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
 
 # export datasets
-train_.to_csv(f'train_data_m3_{DF_TRUNCATE_UB}_{single_token_output}.csv')
-val_.to_csv(f'val_data_m3_{DF_TRUNCATE_UB}_{single_token_output}.csv')
+train_.to_csv(f'train_data_m3_{DF_TRUNCATE_UB}_seq4.csv')
+val_.to_csv(f'val_data_m3_{DF_TRUNCATE_UB}_seq4.csv')
 
 # -------------MODEL PREP----------------
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -330,7 +329,7 @@ val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=to
 model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
     device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load('model_3.pt', map_location=device))
+    model.load_state_dict(torch.load(f'model_3_{DF_TRUNCATE_LB}_{single_token_output}_seq4.pt', map_location=device))
 
 # ------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)
