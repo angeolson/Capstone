@@ -214,14 +214,19 @@ def generate(
         state_h, state_c = model.init_hidden(1)
         # for i in range(entry_length):
         while len(generated_lyrics) < entry_length:
-            generated = tokenizer(
+            # generated = tokenizer(
+            #     " ".join(generated_lyrics),
+            #     add_special_tokens=False,
+            #     return_token_type_ids=False,
+            #     return_attention_mask=True,
+            #     truncation=False,
+            #     padding=False,
+            #     pad_token=0)
+            generated = tokenizer.encode_plus(
                 " ".join(generated_lyrics),
                 add_special_tokens=False,
                 return_token_type_ids=False,
-                return_attention_mask=True,
-                truncation=False,
-                padding=False,
-                pad_token=0)
+                return_attention_mask=True)
             inputs = torch.tensor(generated['input_ids']).to(device)
             inputs = inputs.reshape(1, -1)
             attention_mask = torch.tensor(generated['attention_mask']).to(device)

@@ -3,7 +3,7 @@
   <component name="WebServers">
     <option name="servers">
       <webServer id="36bbb333-a04a-4662-8820-67f980a8e51d" name="AWS-Capstone">
-        <fileTransfer accessType="SFTP" host="3.80.121.205" port="22" sshConfigId="83537286-c10f-4458-b092-0f39a08bbef9" sshConfig="ubuntu@3.80.121.205:22 key" keyPair="true">
+        <fileTransfer accessType="SFTP" host="107.23.140.130" port="22" sshConfigId="83537286-c10f-4458-b092-0f39a08bbef9" sshConfig="ubuntu@107.23.140.130:22 key" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>

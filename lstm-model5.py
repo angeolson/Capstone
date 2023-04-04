@@ -5,52 +5,35 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 import numpy as np
 import random
+from sklearn.model_selection import train_test_split
 from transformers import BertTokenizer, BertModel
+import torch.nn.functional as F
 
 SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+glove = True
 
 # ---------SET VARS--------------------
 EPOCHS = 5
-MAX_LEN = 250
+# MAX_LEN = 300
 SEQUENCE_LEN = 4
+BATCH_SIZE = 256
 LR = 0.001
+HIDDEN_SIZE = 128
+NO_LAYERS = 4
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 250  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
-single_token_output = False  # True if only want to look at last word logits
-load_model = f'model-4-{DF_TRUNCATE_LB}.py'
-save_model = f'model-4-{DF_TRUNCATE_UB}.py'
-
-
-# -----------HELPER FUNCTIONS------------
-def cleanData(df):
-    '''
-    function cleans the original pandas dataframe imported from .csv and returns a clean frame
-    :param df:
-    :return: cleaned pandas dataframe
-    '''
-    for col in ['verses', 'verse_types', 'verses_transformed', 'EDA_verses']:
-        df[col] = df[col].apply(lambda x: eval(x, {'__builtins__': None}, {}))
-    return df
-
-
-def load_words(dataframe):
-    text = dataframe['lyrics'].str.cat(sep=' ')
-    return text.split(' ')
-
+single_token_output = True  # True if only want to look at last word logits
 
 # --------CLASS DEFINITIONS-------------
-
 class Dataset(torch.utils.data.Dataset):
     def __init__(
             self,
             dataframe,
             sequence_length,
             tokenizer,
-            max_len,
             single_token_output,
             bert
     ):
@@ -58,13 +41,18 @@ class Dataset(torch.utils.data.Dataset):
         self.single_token_output = single_token_output
         self.sequence_length = sequence_length
         self.tokenizer = tokenizer
-        self.max_len = max_len
-        self.inputs, self.targets, self.inputs_attention = self.get_data(self.dataframe)
-        self.batch_size = len(self.inputs) // len(self.dataframe)
         self.bert = bert
+        self.text = self.build_text(self.dataframe)
 
     def __len__(self):
-        return len(self.inputs)
+        return len(self.text.split(' ')) - self.sequence_length # length of all inputs minus the sequence length, since that's our starting point
+
+    def build_text(self, dataframe):
+        dataframe['lyrics_added_tokens'] = dataframe['lyrics'].apply(lambda x:'[BOS] '+x+' [EOS]')
+        input = dataframe['lyrics_added_tokens'].str.cat(sep=' ')
+        input = input.replace('<newline>', '[SEP]')
+
+        return input
 
     def build_sequences(self, text, sequence_length, max_len, single_token_output=True):
         '''
@@ -75,13 +63,12 @@ class Dataset(torch.utils.data.Dataset):
         :return:
         '''
         x_input_ids = list()
-        x_attention_mask = list()
         y_input_ids = list()
 
         encoded_text = self.tokenizer.encode_plus(
             text=text,  # the sentence to be encoded
-            add_special_tokens=False,  # Don't add [CLS] and [SEP]
-            max_length=max_len,  # maximum length of a song
+            add_special_tokens=True,  # Add [CLS] and [SEP]
+            max_length=sequence_length,  # maximum length of a sentence = sequence
             pad_to_max_length=True,  # Add [PAD]s
             return_attention_mask=True  # Generate the attention mask
         )
@@ -91,7 +78,6 @@ class Dataset(torch.utils.data.Dataset):
             # Get window of chars from text
             # Then, transform it into its idx representation
             input = encoded_text['input_ids'][i:i + sequence_length]
-            input_attention = encoded_text['attention_mask'][i:i + sequence_length]
 
             # Get word target
             # Then, transform it into its idx representation
@@ -102,92 +88,90 @@ class Dataset(torch.utils.data.Dataset):
 
             # Save sequences and targets
             x_input_ids.append(input)
-            x_attention_mask.append(input_attention)
             y_input_ids.append(target)
 
         x_input_ids = np.array(x_input_ids)
-        x_attention_mask = np.array(x_attention_mask)
         y_input_ids = np.array(y_input_ids)
 
-        return x_input_ids, y_input_ids, x_attention_mask
-
-    def get_data(self, dataframe):
-        X_input_ids = list()
-        X_attention_mask = list()
-        Y_input_ids = list()
-
-        for i in range(len(dataframe)):
-            input = '[BOS] ' + dataframe.iloc[i]['lyrics'] + ' [BOS]'
-            input = input.replace('<newline>', '[SEP]')
-
-            x, y, x_attention = self.build_sequences(text=input,
-                                                     sequence_length=self.sequence_length, max_len=self.max_len,
-                                                     single_token_output=self.single_token_output)
-            X_input_ids.append(x)
-            Y_input_ids.append(y)
-            X_attention_mask.append(x_attention)
-
-        inputs = [sequence for song in X_input_ids for sequence in song]
-        inputs_attention = [sequence for song in X_attention_mask for sequence in song]
-        targets = [targ for song in Y_input_ids for targ in song]
-        return np.array(inputs), np.array(targets), np.array(inputs_attention)
+        return x_input_ids, y_input_ids
 
     def to_categorical(self, y, num_classes):
         """ 1-hot encodes a tensor from https://discuss.pytorch.org/t/is-there-something-like-keras-utils-to-categorical-in-pytorch/5960"""
-        return np.eye(num_classes, dtype='uint8')[y]
+        return np.eye(num_classes, dtype='uint8')[y['input_ids']]
 
     def __getitem__(self, index):
         if torch.is_tensor(index):
             index = index.tolist()
-        x = self.inputs[index]
-        x_attention = self.inputs_attention[index]
-        y = self.targets[index]
-        #y = self.to_categorical(y=y, num_classes=self.bert.config.to_dict()['vocab_size'])  # equiv to n_vocab
-        #y = y[0]
-        return torch.tensor(x), torch.tensor(y), torch.tensor(x_attention)
+        inputs = self.text.split(' ')[index:index + self.sequence_length]
+        inputs = ' '.join(inputs)
+        if self.single_token_output is True:
+            targets = self.text.split(' ')[index + 1 + self.sequence_length]
+            target_length = 1
+        else:
+            targets = self.text[index + 1: index + 1 + self.sequence_length]
+            targets = ' '.join(targets)
+            target_length = self.sequence_length
+
+        x = self.tokenizer.encode_plus(
+            text=inputs,  # the sentence to be encoded
+            add_special_tokens=False,  # Do not add [CLS] and [SEP]
+            max_length=self.sequence_length,  # maximum length of a sentence
+            padding=False,  # Do not add padding
+            return_attention_mask=False, # Do not generate the attention mask
+            return_token_type_ids = False
+        )
+
+        y = self.tokenizer.encode_plus(
+            text=targets,  # the sentence to be encoded
+            add_special_tokens=False,  # Do not add [CLS] and [SEP]
+            max_length=target_length,  # maximum length of a sentence
+            padding=False,  # Do not add padding
+            return_attention_mask=False, # Do not generate the attention mask
+            return_token_type_ids=False
+        )
+
+        y = self.to_categorical(y=y, num_classes=self.bert.config.to_dict()['vocab_size'])  # equiv to n_vocab
+
+        return torch.tensor(x['input_ids']), torch.tensor(y)
 
 
 class Model(nn.Module):
-    def __init__(self, max_len, bert, hidden_dim, no_layers, single_token_output=True):
+    def __init__(self, bert, hidden_dim, no_layers, batch_size, single_token_output=True):
         super(Model, self).__init__()
         self.bert = bert
         self.hidden_dim = hidden_dim
         self.embedding_dim = bert.config.to_dict()['hidden_size']
         self.num_layers = no_layers
         self.n_vocab = bert.config.to_dict()['vocab_size']
-        self.max_len = max_len
+        self.batch_size = batch_size
         self.lstm = nn.LSTM(
             input_size=self.embedding_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.num_layers,
             batch_first=True
         )
-        self.fc1 = nn.Linear(self.hidden_dim, 50)
-        self.fc2 = nn.Linear(50, self.n_vocab)
+        self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
         self.single_token_output = single_token_output
 
-    def forward(self, x, hidden, x_attention):
-        embed = self.bert(input_ids=x, attention_mask=x_attention)[0]
+    def forward(self, x, hidden):
+        embed = self.bert(input_ids=x)[0]
         output, hidden = self.lstm(embed, hidden)
-        out = self.fc1(output)
-        out = self.fc2(out)
+        out = self.fc(output)
         if self.single_token_output is True:
             out = out[:, -1, :]  # keeps only last logits, i.e. logits associated with the last word we want to predict
-        # out = self.softmax(out)
         return out, hidden
 
-    def init_hidden(self, batch_size):
-        h0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
-        c0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
+    def init_hidden(self):
+        h0 = torch.zeros((self.num_layers, self.batch_size, self.hidden_dim)).to(device)
+        c0 = torch.zeros((self.num_layers, self.batch_size, self.hidden_dim)).to(device)
         return h0, c0
 
 
 # --------------MODEL FUNCTIONS----------------
-def train(train_dataset, val_dataset, model, max_epochs, lr):
-    train_batch_size = train_dataset.batch_size
-    val_batch_size = val_dataset.batch_size
-    train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, drop_last=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=train_batch_size, drop_last=True)
+# def train(train_dataset, val_dataset, model, batch_size, max_epochs, seq_len):
+def train(train_dataset, val_dataset, model, max_epochs, batch_size, lr):
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, drop_last=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
     all_val_loss = []
@@ -198,16 +182,13 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
         train_batch_count = 0
         val_batch_count = 0
         model.train()
-        state_h, state_c = model.init_hidden(train_batch_size)
+        state_h, state_c = model.init_hidden()
         for batch in train_dataloader:
             optimizer.zero_grad()
             X = batch[0].to(device)
             Y = batch[1].to(device)
-            X_Attention = batch[2].to(device)
-            y_pred, (state_h, state_c) = model(X, (state_h, state_c), X_Attention)
-            outputs = y_pred.view(4* train_batch_size, 30525)
-            targets = Y.view(-1)
-            loss = criterion(outputs, targets)
+            y_pred, (state_h, state_c) = model(X, (state_h, state_c))
+            loss = criterion(y_pred, Y.float())
             state_h = state_h.detach()
             state_c = state_c.detach()
             loss.backward()
@@ -216,12 +197,11 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
             train_batch_count += 1
             optimizer.step()
         model.eval()
-        val_state_h, val_state_c = model.init_hidden(val_batch_size)
+        val_state_h, val_state_c = model.init_hidden()
         for batch in val_dataloader:
             X = batch[0].to(device)
             Y = batch[1].to(device)
-            X_Attention = batch[2].to(device)
-            y_pred, (val_state_h, val_state_c) = model(X, (val_state_h, val_state_c), X_Attention)
+            y_pred, (val_state_h, val_state_c) = model(X, (val_state_h, val_state_c))
             val_loss = criterion(y_pred, Y.float())
             val_state_h = val_state_h.detach()
             val_state_c = val_state_c.detach()
@@ -237,24 +217,28 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
         best_loss = min(all_val_loss)
         if epoch_val_loss <= best_loss:
-            torch.save(model.state_dict(), f"model_4_{DF_TRUNCATE_UB}_{single_token_output}.pt")
+            torch.save(model.state_dict(), f"model_5_{DF_TRUNCATE_UB}_{single_token_output}.pt")
             print('model saved!')
     losses_df = pd.DataFrame()
     losses_df['val_loss'] = all_val_loss
     losses_df['train_loss'] = all_train_loss
-    losses_df.to_csv(f'epoch_losses_m4_{DF_TRUNCATE_UB}_{single_token_output}.csv')
+    losses_df.to_csv(f'epoch_losses_m5_{DF_TRUNCATE_UB}_{single_token_output}.csv')
 
 
 # ---------LOAD DATA--------------------
-df_train = pd.read_csv('training.csv', index_col=0)
-df_train.reset_index(drop=True, inplace=True)
+df = pd.read_csv('df_LSTM.csv', index_col=0)
+df_copy = df.copy()
+df_copy.reset_index(drop=True, inplace=True)
 
-df_val = pd.read_csv('validation.csv', index_col=0)
-df_val.reset_index(drop=True, inplace=True)
+# truncate
+df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
 
-# truncate; 0.2*250 = 50
-train_ = df_train.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
-val_ = df_val.iloc[DF_TRUNCATE_LB:int(DF_TRUNCATE_UB*0.2)]
+# split data
+train_, val_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
+
+# export datasets
+train_.to_csv(f'train_data_m5_{DF_TRUNCATE_UB}.csv')
+val_.to_csv(f'val_data_m5_{DF_TRUNCATE_UB}.csv')
 
 # -------------MODEL PREP----------------
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -272,16 +256,15 @@ unk_tok_emb = bert.embeddings.word_embeddings.weight.data[tokenizer.unk_token_id
 for i in range(len(new_tokens)):  # initially apply that to all new tokens
     bert.embeddings.word_embeddings.weight.data[-(i + 1), :] = unk_tok_emb
 
-train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN,
+train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer,
                         single_token_output=single_token_output, bert=bert)
-val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN,
+val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer,
                       single_token_output=single_token_output, bert=bert)
 
-model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
+model = Model(single_token_output=single_token_output, bert=bert, hidden_dim=HIDDEN_SIZE, no_layers=NO_LAYERS, batch_size=BATCH_SIZE).to(
     device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load(f'model_4_{DF_TRUNCATE_LB}_{single_token_output}.pt', map_location=device))
+    model.load_state_dict(torch.load(f'model_5_{DF_TRUNCATE_LB}_{single_token_output}.pt', map_location=device))
 
 # ------------MODEL TRAIN----------------
-# train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)
-train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, max_epochs=EPOCHS, lr=LR)
+train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, max_epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LR)
