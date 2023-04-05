@@ -13,16 +13,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # ---------SET VARS--------------------
-EPOCHS = 15
+EPOCHS = 30
 MAX_LEN = 250
 SEQUENCE_LEN = 4
 LR = 0.001
+TRUNCATE = False
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
 load_model = f'model-4-{DF_TRUNCATE_LB}.py'
-save_model = f'model-4-{DF_TRUNCATE_UB}.py'
+save_model = f'model-4-all.py'
+filepath_for_losses = f'epoch_losses_m4_all.csv'
 
 
 # -----------HELPER FUNCTIONS------------
@@ -241,12 +243,12 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
         best_loss = min(all_val_loss)
         if epoch_val_loss <= best_loss:
-            torch.save(model.state_dict(), f"model_4_{DF_TRUNCATE_UB}_{single_token_output}.pt")
+            torch.save(model.state_dict(), save_model)
             print('model saved!')
     losses_df = pd.DataFrame()
     losses_df['val_loss'] = all_val_loss
     losses_df['train_loss'] = all_train_loss
-    losses_df.to_csv(f'epoch_losses_m4_{DF_TRUNCATE_UB}.csv')
+    losses_df.to_csv(filepath_for_losses)
 
 
 # ---------LOAD DATA--------------------
@@ -257,8 +259,12 @@ df_val = pd.read_csv('validation.csv', index_col=0)
 df_val.reset_index(drop=True, inplace=True)
 
 # truncate; 0.2*250 = 50
-train_ = df_train.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
-val_ = df_val.iloc[DF_TRUNCATE_LB:int(DF_TRUNCATE_UB*0.2)]
+if TRUNCATE is True:
+    train_ = df_train.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
+    val_ = df_val.iloc[DF_TRUNCATE_LB:int(DF_TRUNCATE_UB*0.2)]
+else:
+    train_ = df_train.copy()
+    val_ = df_val.copy()
 
 # -------------MODEL PREP----------------
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -284,7 +290,7 @@ val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=to
 model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
     device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load(f'model_4_{DF_TRUNCATE_LB}_{single_token_output}.pt', map_location=device))
+    model.load_state_dict(torch.load(load_model, map_location=device))
 
 # ------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)

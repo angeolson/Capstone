@@ -70,24 +70,15 @@ def generate(
     with torch.no_grad():
         entry_finished = False
         state_h, state_c = model.init_hidden(1)
-        # for i in range(entry_length):
         while len(generated_lyrics) < entry_length:
-            generated = tokenizer.encode_plus(
-                " ".join(generated_lyrics),
-                add_special_tokens=False,
-                return_token_type_ids=False,
-                return_attention_mask=True,
-                max_length=entry_length,  # maximum length of a song
-                pad_to_max_length=True,
+            generated = tokenizer.encode(
+                " ".join(generated_lyrics[-4:])
             )
-            inputs = torch.tensor(generated['input_ids']).to(device)
+            inputs = torch.tensor(generated).to(device)
+            input_list = list(torch.tensor(generated).to(device).detach().cpu().numpy())
+            mask = [int((tokenizer.decode(el)) == '[PAD]') for el in input_list]
             inputs = inputs.reshape(1, -1)
-            attention_mask = torch.tensor(generated['attention_mask']).to(device)
-            # mask = np.ones(len(generated_lyrics))
-            # for i in range(len(generated_lyrics)):
-            #     if generated_lyrics[i] == '[PAD]':
-            #         mask[i] = 0
-            #attention_mask = torch.tensor(mask).to(device)
+            attention_mask = torch.tensor(mask).to(device)
             attention_mask = attention_mask.reshape(1, -1)
             y_pred, (state_h, state_c) = model(inputs, (state_h, state_c), attention_mask)
             if single_token_output is True:
@@ -97,8 +88,8 @@ def generate(
             sorted_logits, sorted_indices = torch.sort(logits, descending=True)
             sorted_logits_prob = F.softmax(sorted_logits, dim=-1)
             cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
-            #sorted_indices_to_remove = cumulative_probs > 0.8
-            sorted_indices_to_remove = sorted_logits_prob < 0.00001
+            sorted_indices_to_remove = cumulative_probs > 0.8
+            #sorted_indices_to_remove = sorted_logits_prob < 0.00001
             keep = sorted_indices[sorted_indices_to_remove]
             sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
             if len(sorted_logits_prob_keep) == 0:
@@ -112,6 +103,11 @@ def generate(
 
             if tokenizer.decode(next_token) == '[EOS]':
                 entry_finished = True
+
+            if tokenizer.decode(next_token) == '[PAD]':
+                mask.append(0)
+            else:
+                mask.append(1)
 
             if entry_finished is True:
                 break
