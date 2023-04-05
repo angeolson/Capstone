@@ -17,7 +17,7 @@ DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
-model_name = f'model_4_{DF_TRUNCATE_UB}_{single_token_output}.pt'
+model_name = f'model-4-all.py'
 
 # --------CLASS DEFINITIONS-------------
 class Model(nn.Module):
@@ -72,10 +72,10 @@ def generate(
         state_h, state_c = model.init_hidden(1)
         while len(generated_lyrics) < entry_length:
             generated = tokenizer.encode(
-                " ".join(generated_lyrics[-4:])
+                " ".join(generated_lyrics)
             )
-            inputs = torch.tensor(generated).to(device)
-            input_list = list(torch.tensor(generated).to(device).detach().cpu().numpy())
+            inputs = torch.tensor(generated[-4:]).to(device)
+            input_list = list(inputs.detach().cpu().numpy())
             mask = [int((tokenizer.decode(el)) == '[PAD]') for el in input_list]
             inputs = inputs.reshape(1, -1)
             attention_mask = torch.tensor(mask).to(device)
@@ -89,14 +89,15 @@ def generate(
             sorted_logits_prob = F.softmax(sorted_logits, dim=-1)
             cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
             sorted_indices_to_remove = cumulative_probs > 0.8
-            #sorted_indices_to_remove = sorted_logits_prob < 0.00001
             keep = sorted_indices[sorted_indices_to_remove]
             sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
-            if len(sorted_logits_prob_keep) == 0:
-                next_token = [0]  # padding token
-            else:
-                next_token_sorted = torch.multinomial(sorted_logits_prob_keep, num_samples=1)
-                next_token = [keep[next_token_sorted].detach().cpu().numpy()[0]]
+            # if len(sorted_logits_prob_keep) == 0:
+            #     next_token = [0]  # padding token
+            # else:
+            #     next_token_sorted = torch.multinomial(sorted_logits_prob_keep, num_samples=1)
+            #     next_token = [keep[next_token_sorted].detach().cpu().numpy()[0]]
+            next_token_sorted = torch.multinomial(sorted_logits_prob, num_samples=1)
+            next_token = [sorted_indices[next_token_sorted].detach().cpu().numpy()[0]]
 
             # generated_lyrics = generated_lyrics + " " + tokenizer.decode(next_token)
             generated_lyrics.append(tokenizer.decode(next_token))

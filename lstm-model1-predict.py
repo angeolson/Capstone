@@ -17,6 +17,7 @@ glove = False
 embedding_dim = 200  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
 single_token_output=False
+save_model = f'model-1-all.py'
 
 #----HELPER FUNCTIONS-------
 def embedding_for_vocab(filepath, word_index,
@@ -90,6 +91,7 @@ def predict(word_to_index, index_to_word, model, text, single_token_output, next
         words.append(item)
     state_h, state_c = model.init_hidden(1)
     for i in range(0, next_words):
+        x = torch.tensor([[word_to_index[w] for w in words[i:]]][-4:]).to(device)
         x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
         if single_token_output is True:
@@ -99,13 +101,13 @@ def predict(word_to_index, index_to_word, model, text, single_token_output, next
         sorted_logits, sorted_indices = torch.sort(logits, descending=True)
         sorted_logits_prob = F.softmax(sorted_logits, dim=-1)
         cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
-        sorted_indices_to_keep = cumulative_probs < 0.8
-        keep = sorted_indices[sorted_indices_to_keep]
+        sorted_indices_to_remove = cumulative_probs > 0.8
+        keep = sorted_indices[sorted_indices_to_remove]
         sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
         if len(sorted_logits_prob_keep) == 0:
             next_token = 0 # padding token
         else:
-            next_token_sorted = torch.multinomial(sorted_logits_prob_keep, num_samples=1)
+            next_token_sorted = torch.multinomial(sorted_logits_prob, num_samples=1)
             next_token = keep[next_token_sorted].detach().cpu().numpy()[0]
         # softmax = nn.Softmax(dim=0)
         # word_softmax = softmax(logits)
@@ -142,7 +144,7 @@ embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_ind
 
 #---------LOAD MODEL--------------------
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, single_token_output=single_token_output, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix).to(device)
-model.load_state_dict(torch.load(f'model_1_{single_token_output}_750.pt', map_location=device))
+model.load_state_dict(torch.load(save_model, map_location=device))
 
 #------------MODEL RUN-----------------
 print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text="i have been walking in my shadows <newline> where i am walking to i do not know", next_words=250, single_token_output=single_token_output))

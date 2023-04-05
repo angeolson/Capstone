@@ -17,14 +17,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 5
-MAX_LEN = 300
-SEQUENCE_LEN = 8
-DF_TRUNCATE_LB = 2000 # lower bound to truncate data
-DF_TRUNCATE_UB = 2250 # upper bound to truncate data
-Iterative_Train = True # False if training model from scratch, True if fine-tuning
-single_token_output = False # True if only want to look at last word logits
-# BATCH_SIZE = MAX_LEN - SEQUENCE_LEN
+EPOCHS = 30
+MAX_LEN = 250
+SEQUENCE_LEN = 4
+LR = 0.001
+TRUNCATE = False
+DF_TRUNCATE_LB = 0  # lower bound to truncate data
+DF_TRUNCATE_UB = 1000  # upper bound to truncate data
+Iterative_Train = False  # False if training model from scratch, True if fine-tuning
+single_token_output = False  # True if only want to look at last word logits
+load_model = f'model-1-{DF_TRUNCATE_LB}.py'
+save_model = f'model-1-all.py'
+filepath_for_losses = f'epoch_losses_m1_all.csv'
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
@@ -81,7 +85,6 @@ class Dataset(torch.utils.data.Dataset):
         dataframe,
         sequence_length,
         tokenizer,
-        # batch_size,
         max_len,
         words,
         uniq_words,
@@ -102,16 +105,6 @@ class Dataset(torch.utils.data.Dataset):
         self.max_len = max_len
         self.inputs, self.targets = self.get_data(self.dataframe)
         self.batch_size = len(self.inputs) // len(self.dataframe)
-
-
-    # def load_words(self, dataframe):
-    #     text = dataframe['lyrics'].str.cat(sep=' ')
-    #     return text.split(' ')
-    # def get_uniq_words(self):
-    #     word_counts = Counter(self.words)
-    #     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    #     unique_words_padding = ['PAD'] + unique_words
-    #     return unique_words_padding
 
     def __len__(self):
         return len(self.inputs)
@@ -188,7 +181,7 @@ class Dataset(torch.utils.data.Dataset):
             index = index.tolist()
         x = self.inputs[index]
         y = self.targets[index]
-        y = self.to_categorical(y=y, num_classes=len(self.uniq_words)) # equiv to n_vocab
+        #y = self.to_categorical(y=y, num_classes=len(self.uniq_words)) # equiv to n_vocab
         return torch.tensor(x), torch.tensor(y)
 
 class Model(nn.Module):
@@ -197,8 +190,6 @@ class Model(nn.Module):
         self.hidden_dim = 128
         self.embedding_dim = embedding_dim
         self.num_layers = 4
-        # n_vocab = len(dataset.uniq_words)
-        # self.max_len = dataset.max_len
         n_vocab = len(uniq_words)
         self.max_len = max_len
         if glove is True:
@@ -217,8 +208,6 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        self.softmax = nn.Softmax(dim=1)
-        self.softmax2d = nn.Softmax2d()
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden):
@@ -238,16 +227,14 @@ class Model(nn.Module):
 #--------------MODEL FUNCTIONS----------------
 #def train(train_dataset, val_dataset, model, batch_size, max_epochs, seq_len):
 def train(train_dataset, val_dataset, model, max_epochs, seq_len):
-    # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, drop_last=True)
-    # val_dataloader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
+    all_val_loss = []
+    all_train_loss = []
     train_batch_size = train_dataset.batch_size
     val_batch_size = val_dataset.batch_size
     train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=train_batch_size, drop_last=True)
     criterion = nn.CrossEntropyLoss()
-    #criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    all_loss = []
     for epoch in range(max_epochs):
         train_losses = []
         val_losses = []
@@ -260,42 +247,47 @@ def train(train_dataset, val_dataset, model, max_epochs, seq_len):
             X = batch[0].to(device)
             Y = batch[1].to(device)
             y_pred, (state_h, state_c) = model(X, (state_h, state_c))
-            # loss = criterion(y_pred.transpose(1, 2), Y)
-            loss = criterion(y_pred, Y.float())
-            state_h = state_h.detach()
-            state_c = state_c.detach()
-            loss.backward()
+            outputs = y_pred.view(seq_len * train_batch_size, len(train_dataset.uniq_words))
+            targets = Y.view(-1)
+            if len(targets) == seq_len * train_batch_size:
+                loss = criterion(outputs, targets)
+                state_h = state_h.detach()
+                state_c = state_c.detach()
+                loss.backward()
+                train_losses.append(loss.item())
+                print({'epoch': epoch, 'batch': train_batch_count, 'train loss': loss.item()})
+                train_batch_count += 1
             optimizer.step()
-            train_losses.append(loss.item())
-            print({ 'epoch': epoch, 'batch': train_batch_count, 'train loss': loss.item() })
-            train_batch_count += 1
         model.eval()
         val_state_h, val_state_c = model.init_hidden(val_batch_size)
         for batch in val_dataloader:
             X = batch[0].to(device)
             Y = batch[1].to(device)
             y_pred, (val_state_h, val_state_c) = model(X, (val_state_h, val_state_c))
-            # loss = criterion(y_pred.transpose(1, 2), Y)
-            val_loss = criterion(y_pred, Y.float())
-            val_state_h = val_state_h.detach()
-            val_state_c = val_state_c.detach()
-            val_losses.append(val_loss.item())
-            print({'epoch': epoch, 'batch': val_batch_count, 'val loss': val_loss.item()})
-            val_batch_count += 1
-
+            outputs = y_pred.view(seq_len * val_batch_size, len(val_dataset.uniq_words))
+            targets = Y.view(-1)
+            if len(targets) == seq_len * val_batch_size:
+                val_loss = criterion(outputs, targets)
+                val_state_h = val_state_h.detach()
+                val_state_c = val_state_c.detach()
+                val_losses.append(val_loss.item())
+                print({'epoch': epoch, 'batch': val_batch_count, 'val loss': val_loss.item()})
+                val_batch_count += 1
 
         epoch_train_loss = np.mean(train_losses)
         epoch_val_loss = np.mean(val_losses)
-        all_loss.append(epoch_val_loss)
+        all_val_loss.append(epoch_val_loss)
+        all_train_loss.append(epoch_train_loss)
         print(f'Epoch {epoch}')
         print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
-        best_loss = min(all_loss)
+        best_loss = min(all_val_loss)
         if epoch_val_loss <= best_loss:
-            if Iterative_Train is False:
-                torch.save(model.state_dict(), f"model_1_{single_token_output}.pt")
-            else:
-                torch.save(model.state_dict(), f"model_1_{single_token_output}_{DF_TRUNCATE_UB}.pt")
+            torch.save(model.state_dict(), save_model)
             print('model saved!')
+        losses_df = pd.DataFrame()
+        losses_df['val_loss'] = all_val_loss
+        losses_df['train_loss'] = all_train_loss
+        losses_df.to_csv(filepath_for_losses)
 
 #---------LOAD DATA--------------------
 df = pd.read_csv('df_LSTM.csv', index_col=0)
@@ -308,26 +300,28 @@ uniq_words = get_uniq_words(words)
 word_to_index = {word: index for index, word in enumerate(uniq_words)}
 embedding_matrix = embedding_for_vocab(filepath=filepath, word_index=word_to_index, embedding_dim=embedding_dim)
 
-#truncate
-df_copy = df.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
+# read data to use
+df_train = pd.read_csv('training.csv', index_col=0)
+df_train.reset_index(drop=True, inplace=True)
 
-# split data
-train_, val_ = train_test_split(df_copy, train_size=0.8, random_state=SEED)
+df_val = pd.read_csv('validation.csv', index_col=0)
+df_val.reset_index(drop=True, inplace=True)
 
-# export datasets
-train_.to_csv(f'train_data_m1_{DF_TRUNCATE_UB}.csv')
-val_.to_csv(f'val_data_m1_{DF_TRUNCATE_UB}.csv')
+# truncate; 0.2*250 = 50
+if TRUNCATE is True:
+    train_ = df_train.iloc[DF_TRUNCATE_LB:DF_TRUNCATE_UB]
+    val_ = df_val.iloc[DF_TRUNCATE_LB:int(DF_TRUNCATE_UB*0.2)]
+else:
+    train_ = df_train.copy()
+    val_ = df_val.copy()
 
 #-------------MODEL PREP----------------
-# train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
-# val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
-# test_dataset = Dataset(dataframe=test_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, batch_size=BATCH_SIZE, max_len=MAX_LEN, words=words, uniq_words=uniq_words)
 train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words, single_token_output=single_token_output)
 val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN, words=words, uniq_words=uniq_words, single_token_output=single_token_output)
 
 model = Model(uniq_words=uniq_words, max_len=MAX_LEN, embedding_dim=embedding_dim, embedding_matrix=embedding_matrix, single_token_output=single_token_output).to(device)
 if Iterative_Train is True:
-    model.load_state_dict(torch.load(f'model_1_{single_token_output}_1750.pt', map_location=device))
+    model.load_state_dict(torch.load(load_model, map_location=device))
 
 #------------MODEL TRAIN----------------
 # train(train_dataset=train_dataset, val_dataset=val_dataset, model=model, batch_size=BATCH_SIZE, max_epochs=EPOCHS, seq_len=SEQUENCE_LEN)
