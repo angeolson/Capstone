@@ -1,13 +1,12 @@
+# temp calc from https://github.com/klaudia-nazarko/nlg-text-generation/blob/main/LSTM_class.py
+
 # imports
-import pandas as pd
 import torch
-from torch import nn, optim
-from torch.utils.data import DataLoader
-from collections import Counter
-import numpy as np
+from torch import nn
 import random
 import torch.nn.functional as F
 from transformers import BertTokenizer, BertModel
+import numpy as np
 
 SEED = 48
 random.seed(48)
@@ -59,7 +58,8 @@ def generate(
         tokenizer,
         prompt,
         single_token_output,
-        entry_length=350 # maximum number of words
+        entry_length=350,
+        temperature=1.0
 
 ):
     model.eval()
@@ -70,12 +70,14 @@ def generate(
         entry_finished = False
         state_h, state_c = model.init_hidden(1)
         while len(generated_lyrics) < entry_length:
-            generated = tokenizer.encode(
-                " ".join(generated_lyrics)
+            generated = tokenizer.encode_plus(
+                " ".join(generated_lyrics),
+                add_special_tokens=False,  # Don't add [CLS] and [SEP]
+                return_attention_mask=False  # Generate the attention mask
             )
-            inputs = torch.tensor(generated).to(device)
+            inputs = torch.tensor(generated['input_ids'][-4:]).to(device)
             input_list = list(inputs.detach().cpu().numpy())
-            mask = [int((tokenizer.decode(el)) == '[PAD]') for el in input_list]
+            mask = [int((tokenizer.decode(el)) != '[PAD]') for el in input_list]
             inputs = inputs.reshape(1, -1)
             attention_mask = torch.tensor(mask).to(device)
             attention_mask = attention_mask.reshape(1, -1)
@@ -86,16 +88,18 @@ def generate(
                 logits = y_pred[0][-1]
             sorted_logits, sorted_indices = torch.sort(logits, descending=True)
             sorted_logits_prob = F.softmax(sorted_logits, dim=-1)
-            cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
-            sorted_indices_to_remove = cumulative_probs > 0.8
-            keep = sorted_indices[sorted_indices_to_remove]
-            sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
+            prob_with_temperature = np.exp(np.where(sorted_logits_prob.detach().cpu().numpy() == 0, 0, np.log(sorted_logits_prob.detach().cpu().numpy() + 1e-10)) / temperature)
+            prob_with_temperature /= np.sum(prob_with_temperature)
+            # cumulative_probs = torch.cumsum(sorted_logits_prob, dim=-1)
+            # sorted_indices_to_remove = cumulative_probs > 0.8
+            # keep = sorted_indices[sorted_indices_to_remove]
+            # sorted_logits_prob_keep = sorted_logits_prob[:len(keep)]
             # if len(sorted_logits_prob_keep) == 0:
             #     next_token = [0]  # padding token
             # else:
             #     next_token_sorted = torch.multinomial(sorted_logits_prob_keep, num_samples=1)
             #     next_token = [keep[next_token_sorted].detach().cpu().numpy()[0]]
-            next_token_sorted = torch.multinomial(sorted_logits_prob, num_samples=1)
+            next_token_sorted = torch.multinomial(torch.tensor(prob_with_temperature), num_samples=1)
             next_token = [sorted_indices[next_token_sorted].detach().cpu().numpy()[0]]
 
             # generated_lyrics = generated_lyrics + " " + tokenizer.decode(next_token)
@@ -138,5 +142,5 @@ model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=ber
 model.load_state_dict(torch.load(model_name, map_location=device))
 
 #------------MODEL RUN-----------------
-song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] i'm just walking in my shadows [SEP] where i'm walking to i don't know", entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer)
+song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] darkness", entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer, temperature = 0.8)
 print(song)
