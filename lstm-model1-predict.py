@@ -45,8 +45,6 @@ class Model(nn.Module):
         self.hidden_dim = 128
         self.embedding_dim = embedding_dim
         self.num_layers = 4
-        # n_vocab = len(dataset.uniq_words)
-        # self.max_len = dataset.max_len
         n_vocab = len(uniq_words)
         self.max_len = max_len
         if glove is True:
@@ -65,8 +63,6 @@ class Model(nn.Module):
             batch_first=True
         )
         self.fc = nn.Linear(self.hidden_dim, n_vocab)
-        self.softmax = nn.Softmax(dim=1)
-        self.softmax2d = nn.Softmax2d()
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden):
@@ -92,7 +88,7 @@ def predict(word_to_index, index_to_word, model, text, single_token_output, next
     state_h, state_c = model.init_hidden(1)
     for i in range(0, next_words):
         x = torch.tensor([[word_to_index[w] for w in words[i:]]][-4:]).to(device)
-        x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
+        #x = torch.tensor([[word_to_index[w] for w in words[i:]]]).to(device)
         y_pred, (state_h, state_c) = model(x, (state_h, state_c))
         if single_token_output is True:
             logits = y_pred[0]

@@ -13,18 +13,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # ---------SET VARS--------------------
-EPOCHS = 30
+EPOCHS = 40
 MAX_LEN = 250
-SEQUENCE_LEN = 4
+SEQUENCE_LEN = 8
 LR = 0.001
 TRUNCATE = False
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
-load_model = f'model-4-{DF_TRUNCATE_LB}.py'
-save_model = f'model-4-all.py'
-filepath_for_losses = f'epoch_losses_m4_all.csv'
+load_model = 'model-4-all.pt'
+save_model = 'model-4-all-8.pt'
+filepath_for_losses = 'epoch_losses_m4_all_8seq.csv'
 
 
 # -----------HELPER FUNCTIONS------------
@@ -164,8 +164,8 @@ class Model(nn.Module):
             num_layers=self.num_layers,
             batch_first=True
         )
-        self.fc1 = nn.Linear(self.hidden_dim, 50)
-        self.fc2 = nn.Linear(50, self.n_vocab)
+        self.fc1 = nn.Linear(self.hidden_dim, 256)
+        self.fc2 = nn.Linear(256, self.n_vocab)
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden, x_attention):
@@ -245,10 +245,10 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
         if epoch_val_loss <= best_loss:
             torch.save(model.state_dict(), save_model)
             print('model saved!')
-    losses_df = pd.DataFrame()
-    losses_df['val_loss'] = all_val_loss
-    losses_df['train_loss'] = all_train_loss
-    losses_df.to_csv(filepath_for_losses)
+        losses_df = pd.DataFrame()
+        losses_df['val_loss'] = all_val_loss
+        losses_df['train_loss'] = all_train_loss
+        losses_df.to_csv(filepath_for_losses)
 
 
 # ---------LOAD DATA--------------------

@@ -17,7 +17,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 30
+EPOCHS = 40
 MAX_LEN = 250
 SEQUENCE_LEN = 4
 LR = 0.001
@@ -26,9 +26,9 @@ DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
-load_model = f'model-1-{DF_TRUNCATE_LB}.py'
-save_model = f'model-1-all.py'
-filepath_for_losses = f'epoch_losses_m1_all.csv'
+load_model = f'model-1-{DF_TRUNCATE_LB}.pt'
+save_model = 'model-1-all.pt'
+filepath_for_losses = 'epoch_losses_m1_all.csv'
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath

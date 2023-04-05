@@ -13,11 +13,9 @@ SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 MAX_LEN = 250
-DF_TRUNCATE_LB = 0  # lower bound to truncate data
-DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
-model_name = f'model-4-all.py'
+model_name = 'model-4-all.pt'
 
 # --------CLASS DEFINITIONS-------------
 class Model(nn.Module):
@@ -35,8 +33,8 @@ class Model(nn.Module):
             num_layers=self.num_layers,
             batch_first=True
         )
-        self.fc1 = nn.Linear(self.hidden_dim, 50)
-        self.fc2 = nn.Linear(50, self.n_vocab)
+        self.fc1 = nn.Linear(self.hidden_dim, 256)
+        self.fc2 = nn.Linear(256, self.n_vocab)
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden, x_attention):
@@ -53,6 +51,7 @@ class Model(nn.Module):
         h0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
         c0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
         return h0, c0
+
 
 # -----------HELPER FUNCTIONS------------
 def generate(
@@ -74,7 +73,7 @@ def generate(
             generated = tokenizer.encode(
                 " ".join(generated_lyrics)
             )
-            inputs = torch.tensor(generated[-4:]).to(device)
+            inputs = torch.tensor(generated).to(device)
             input_list = list(inputs.detach().cpu().numpy())
             mask = [int((tokenizer.decode(el)) == '[PAD]') for el in input_list]
             inputs = inputs.reshape(1, -1)
@@ -105,10 +104,10 @@ def generate(
             if tokenizer.decode(next_token) == '[EOS]':
                 entry_finished = True
 
-            if tokenizer.decode(next_token) == '[PAD]':
-                mask.append(0)
-            else:
-                mask.append(1)
+            # if tokenizer.decode(next_token) == '[PAD]':
+            #     mask.append(0)
+            # else:
+            #     mask.append(1)
 
             if entry_finished is True:
                 break
@@ -139,5 +138,5 @@ model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=ber
 model.load_state_dict(torch.load(model_name, map_location=device))
 
 #------------MODEL RUN-----------------
-song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] i'm just walking in my shadows [SEP] where i'm walking to i don't know", entry_length=250, single_token_output=single_token_output, tokenizer=tokenizer)
+song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] i'm just walking in my shadows [SEP] where i'm walking to i don't know", entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer)
 print(song)
