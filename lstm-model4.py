@@ -13,12 +13,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # ---------SET VARS--------------------
-EPOCHS = 5
+EPOCHS = 15
 MAX_LEN = 250
 SEQUENCE_LEN = 4
 LR = 0.001
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
-DF_TRUNCATE_UB = 250  # upper bound to truncate data
+DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
 load_model = f'model-4-{DF_TRUNCATE_LB}.py'
@@ -207,13 +207,14 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
             y_pred, (state_h, state_c) = model(X, (state_h, state_c), X_Attention)
             outputs = y_pred.view(4* train_batch_size, 30525)
             targets = Y.view(-1)
-            loss = criterion(outputs, targets)
-            state_h = state_h.detach()
-            state_c = state_c.detach()
-            loss.backward()
-            train_losses.append(loss.item())
-            print({'epoch': epoch, 'batch': train_batch_count, 'train loss': loss.item()})
-            train_batch_count += 1
+            if len(targets) == 4* train_batch_size:
+                loss = criterion(outputs, targets)
+                state_h = state_h.detach()
+                state_c = state_c.detach()
+                loss.backward()
+                train_losses.append(loss.item())
+                print({'epoch': epoch, 'batch': train_batch_count, 'train loss': loss.item()})
+                train_batch_count += 1
             optimizer.step()
         model.eval()
         val_state_h, val_state_c = model.init_hidden(val_batch_size)
@@ -222,12 +223,15 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
             Y = batch[1].to(device)
             X_Attention = batch[2].to(device)
             y_pred, (val_state_h, val_state_c) = model(X, (val_state_h, val_state_c), X_Attention)
-            val_loss = criterion(y_pred, Y.float())
-            val_state_h = val_state_h.detach()
-            val_state_c = val_state_c.detach()
-            val_losses.append(val_loss.item())
-            print({'epoch': epoch, 'batch': val_batch_count, 'val loss': val_loss.item()})
-            val_batch_count += 1
+            outputs = y_pred.view(4 * train_batch_size, 30525)
+            targets = Y.view(-1)
+            if len(targets) == 4 * train_batch_size:
+                val_loss = criterion(outputs, targets)
+                val_state_h = val_state_h.detach()
+                val_state_c = val_state_c.detach()
+                val_losses.append(val_loss.item())
+                print({'epoch': epoch, 'batch': val_batch_count, 'val loss': val_loss.item()})
+                val_batch_count += 1
 
         epoch_train_loss = np.mean(train_losses)
         epoch_val_loss = np.mean(val_losses)
@@ -242,7 +246,7 @@ def train(train_dataset, val_dataset, model, max_epochs, lr):
     losses_df = pd.DataFrame()
     losses_df['val_loss'] = all_val_loss
     losses_df['train_loss'] = all_train_loss
-    losses_df.to_csv(f'epoch_losses_m4_{DF_TRUNCATE_UB}_{single_token_output}.csv')
+    losses_df.to_csv(f'epoch_losses_m4_{DF_TRUNCATE_UB}.csv')
 
 
 # ---------LOAD DATA--------------------
