@@ -17,7 +17,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 glove = True
 
 #---------SET VARS--------------------
-EPOCHS = 40
+EPOCHS = 50
 MAX_LEN = 250
 SEQUENCE_LEN = 4
 LR = 0.001
@@ -27,8 +27,8 @@ DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
 load_model = f'model-1-{DF_TRUNCATE_LB}.pt'
-save_model = 'model-1-all.pt'
-filepath_for_losses = 'epoch_losses_m1_all.csv'
+save_model = 'model-1-hs256.pt'
+filepath_for_losses = 'epoch_losses_m1_hs256.csv'
 
 embedding_dim = 200  # set = 50 for the 50d file, eg.
 filepath = f'Glove/glove.6B.{embedding_dim}d.txt'  # set filepath
@@ -55,7 +55,7 @@ def load_words(dataframe):
 def get_uniq_words(words):
     word_counts = Counter(words)
     unique_words = sorted(word_counts, key=word_counts.get, reverse=True)
-    unique_words_padding = ['<PAD>'] + unique_words
+    unique_words_padding = ['<PAD>', '[BOS]', '[EOS]'] + unique_words
     return unique_words_padding
 
 # code for embedding function adapted from https://www.geeksforgeeks.org/pre-trained-word-embedding-using-glove-in-nlp-models/
@@ -161,7 +161,8 @@ class Dataset(torch.utils.data.Dataset):
 
         for i in range(len(dataframe)):
             # input = '<NEWSONG> ' + dataframe.iloc[i]['lyrics']
-            input = dataframe.iloc[i]['lyrics']
+            input = '[BOS] ' + dataframe.iloc[i]['lyrics'] + ' [EOS]'
+            #input = dataframe.iloc[i]['lyrics']
             tokenized_input = self.tokenizer(input)
             x, y = self.build_sequences(text=tokenized_input, word_to_index=self.word_to_index,
                                         sequence_length=self.sequence_length, max_len=self.max_len, single_token_output=self.single_token_output)
@@ -187,7 +188,7 @@ class Dataset(torch.utils.data.Dataset):
 class Model(nn.Module):
     def __init__(self, uniq_words, max_len, embedding_dim, embedding_matrix, single_token_output=True):
         super(Model, self).__init__()
-        self.hidden_dim = 128
+        self.hidden_dim = 256
         self.embedding_dim = embedding_dim
         self.num_layers = 4
         n_vocab = len(uniq_words)

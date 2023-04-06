@@ -144,13 +144,15 @@ model.load_state_dict(torch.load(model_name, map_location=device))
 #------------MODEL RUN-----------------
 list_of_words = ['darkness', 'love', 'i', 'you', 'help', 'what', 'have', 'in', 'once', 'who', 'tomorrow', 'today', 'let']
 
-generated_songs = pd.DataFrame()
+song_list = [ ]
 for i in range(100):
     prompt = random.choice(list_of_words)
     temp = np.random.uniform(low=0.8, high=1.2, size=None)
     entry_length = np.random.randint(240, high=350, size=None, dtype=int)
     song = generate(model=model, prompt=f"[BOS] <SONGBREAK> [SEP] {prompt}", entry_length=entry_length, single_token_output=single_token_output, tokenizer=tokenizer, temperature = temp)
-    generated_songs['song'] = song
-    generated_songs['gen_type'] = 'lstm-bert'
+    song_list.append(song)
 
+generated_songs = pd.DataFrame()
+generated_songs['song'] = song_list
+generated_songs['gen_type'] = 'lstm-bert'
 generated_songs.to_csv('bert-lstm-gen.csv')

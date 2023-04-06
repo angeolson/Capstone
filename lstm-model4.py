@@ -13,18 +13,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # ---------SET VARS--------------------
-EPOCHS = 10
+EPOCHS = 50
 MAX_LEN = 250
 SEQUENCE_LEN = 4
 LR = 0.001
 TRUNCATE = False
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 1000  # upper bound to truncate data
-Iterative_Train = True  # False if training model from scratch, True if fine-tuning
+Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
 load_model = 'model-4-all.pt'
-save_model = 'model-4-all-next-10.pt'
-filepath_for_losses = 'epoch_losses_m4_all_next10.csv'
+save_model = 'model-4-hs256.pt'
+filepath_for_losses = 'epoch_losses_m4_hs256.csv'
 
 
 # -----------HELPER FUNCTIONS------------
@@ -119,7 +119,7 @@ class Dataset(torch.utils.data.Dataset):
         Y_input_ids = list()
 
         for i in range(len(dataframe)):
-            input = '[BOS] ' + dataframe.iloc[i]['lyrics'] + ' [BOS]'
+            input = '[BOS] ' + dataframe.iloc[i]['lyrics'] + ' [EOS]'
             input = input.replace('<newline>', '[SEP]')
 
             x, y, x_attention = self.build_sequences(text=input,
@@ -162,17 +162,20 @@ class Model(nn.Module):
             input_size=self.embedding_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.num_layers,
-            batch_first=True
+            batch_first=True,
+            dropout=0.2,
         )
-        self.fc1 = nn.Linear(self.hidden_dim, 256)
-        self.fc2 = nn.Linear(256, self.n_vocab)
+        self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
+        # self.fc1 = nn.Linear(self.hidden_dim, 256)
+        # self.fc2 = nn.Linear(256, self.n_vocab)
         self.single_token_output = single_token_output
 
     def forward(self, x, hidden, x_attention):
         embed = self.bert(input_ids=x, attention_mask=x_attention)[0]
         output, hidden = self.lstm(embed, hidden)
-        out = self.fc1(output)
-        out = self.fc2(out)
+        out = self.fc(output)
+        # out = self.fc1(output)
+        # out = self.fc2(out)
         if self.single_token_output is True:
             out = out[:, -1, :]  # keeps only last logits, i.e. logits associated with the last word we want to predict
         # out = self.softmax(out)
@@ -287,7 +290,7 @@ train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenize
 val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN,
                       single_token_output=single_token_output, bert=bert)
 
-model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
+model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=256, no_layers=4).to(
     device)
 if Iterative_Train is True:
     model.load_state_dict(torch.load(load_model, map_location=device))
