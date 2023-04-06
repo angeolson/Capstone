@@ -13,18 +13,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # ---------SET VARS--------------------
-EPOCHS = 40
+EPOCHS = 10
 MAX_LEN = 250
 SEQUENCE_LEN = 4
 LR = 0.001
 TRUNCATE = False
 DF_TRUNCATE_LB = 0  # lower bound to truncate data
 DF_TRUNCATE_UB = 1000  # upper bound to truncate data
-Iterative_Train = False  # False if training model from scratch, True if fine-tuning
+Iterative_Train = True  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
 load_model = 'model-4-all.pt'
-save_model = 'model-4-all-next-40.pt'
-filepath_for_losses = 'epoch_losses_m4_all_8seq.csv'
+save_model = 'model-4-all-next-10.pt'
+filepath_for_losses = 'epoch_losses_m4_all_next10.csv'
 
 
 # -----------HELPER FUNCTIONS------------

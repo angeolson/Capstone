@@ -1,5 +1,5 @@
 # temp calc from https://github.com/klaudia-nazarko/nlg-text-generation/blob/main/LSTM_class.py
-
+import pandas as pd
 # imports
 import torch
 from torch import nn
@@ -142,5 +142,15 @@ model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=ber
 model.load_state_dict(torch.load(model_name, map_location=device))
 
 #------------MODEL RUN-----------------
-song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] darkness", entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer, temperature = 1)
-print(song)
+list_of_words = ['darkness', 'love', 'i', 'you', 'help', 'what', 'have', 'in', 'once', 'who', 'tomorrow', 'today', 'let']
+
+generated_songs = pd.DataFrame()
+for i in range(100):
+    prompt = random.choice(list_of_words)
+    temp = np.random.uniform(low=0.8, high=1.2, size=None)
+    entry_length = np.random.randint(240, high=350, size=None, dtype=int)
+    song = generate(model=model, prompt=f"[BOS] <SONGBREAK> [SEP] {prompt}", entry_length=entry_length, single_token_output=single_token_output, tokenizer=tokenizer, temperature = temp)
+    generated_songs['song'] = song
+    generated_songs['gen_type'] = 'lstm-bert'
+
+generated_songs.to_csv('bert-lstm-gen.csv')
