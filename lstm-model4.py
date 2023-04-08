@@ -5,7 +5,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 import numpy as np
 import random
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertModel, BertConfig
 
 SEED = 48
 random.seed(48)
@@ -23,8 +23,8 @@ DF_TRUNCATE_UB = 1000  # upper bound to truncate data
 Iterative_Train = False  # False if training model from scratch, True if fine-tuning
 single_token_output = False  # True if only want to look at last word logits
 load_model = 'model-4-all.pt'
-save_model = 'model-4-hs256.pt'
-filepath_for_losses = 'epoch_losses_m4_hs256.csv'
+save_model = 'model-4-hs128-2fc-vocab_trunc.pt'
+filepath_for_losses = 'epoch_losses_m4_hs128-2fc-vocab_trunc.csv'
 
 
 # -----------HELPER FUNCTIONS------------
@@ -165,17 +165,24 @@ class Model(nn.Module):
             batch_first=True,
             dropout=0.2,
         )
-        self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
-        # self.fc1 = nn.Linear(self.hidden_dim, 256)
-        # self.fc2 = nn.Linear(256, self.n_vocab)
+        # self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
+        # self.dropout = nn.Dropout(0.2)
+        self.fc1 = nn.Linear(self.hidden_dim, 256)
+        self.fc2 = nn.Linear(256, self.n_vocab)
+        # self.fc2 = nn.Linear(256, 512)
+        # self.fc3 = nn.Linear(512, self.n_vocab)
         self.single_token_output = single_token_output
+        self.act = nn.ReLU()
 
     def forward(self, x, hidden, x_attention):
         embed = self.bert(input_ids=x, attention_mask=x_attention)[0]
         output, hidden = self.lstm(embed, hidden)
-        out = self.fc(output)
-        # out = self.fc1(output)
-        # out = self.fc2(out)
+        out = self.fc1(output)
+        out = self.fc2(out)
+        # out = self.fc(output)
+        # out = self.act(self.fc1(output))
+        # out = self.act(self.fc2(out))
+        # out = self.fc3(out)
         if self.single_token_output is True:
             out = out[:, -1, :]  # keeps only last logits, i.e. logits associated with the last word we want to predict
         # out = self.softmax(out)
@@ -270,8 +277,9 @@ else:
     val_ = df_val.copy()
 
 # -------------MODEL PREP----------------
+configuration = BertConfig(vocab_size=25000)
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-bert = BertModel.from_pretrained("bert-base-uncased")
+bert = BertModel(config=configuration).from_pretrained("bert-base-uncased")
 
 # freeze the pretrained layers
 for param in bert.parameters():
@@ -290,7 +298,7 @@ train_dataset = Dataset(dataframe=train_, sequence_length=SEQUENCE_LEN, tokenize
 val_dataset = Dataset(dataframe=val_, sequence_length=SEQUENCE_LEN, tokenizer=tokenizer, max_len=MAX_LEN,
                       single_token_output=single_token_output, bert=bert)
 
-model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=256, no_layers=4).to(
+model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
     device)
 if Iterative_Train is True:
     model.load_state_dict(torch.load(load_model, map_location=device))
