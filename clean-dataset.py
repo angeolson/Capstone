@@ -114,6 +114,12 @@ def VerseCleaner(df):
     return df
 
 def sentencePipe(sent):
+    '''
+    adds spaces between certain punctuation marks and words, so that those will be counted as separate
+    tokens. removes leading/trailing whitespace. adds a special token denoted a newline to the front of each sentence.
+    :param sent:
+    :return:
+    '''
     pat = re.compile(r"([.()!?,:;/-])")
     new_sentence = pat.sub(" \\1 ", sent)
     new_sentence = re.sub(r'\s+', ' ', new_sentence)
@@ -121,6 +127,14 @@ def sentencePipe(sent):
     return new_sentence.split(" ")
 
 def versesTransform(df):
+    '''
+    either returns cleaned sentences within each verse of a song, or denotes if the # of verses
+    is not equal to the # of verse markers, suggesting this song should not be part of the final
+    dataset.
+
+    :param df:
+    :return:
+    '''
     full_list = []
     if len(df.verses) == len(df.verse_types):
         for i in range(len(df.verses)):
