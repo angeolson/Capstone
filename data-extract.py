@@ -1,27 +1,33 @@
-'''
-last update: 2/7
-purpose: create dataframe from .zip file with json data 
-author: Ange Olson 
+"""
+last update: 4/11, added arguments to run file at the command line.
+purpose: create dataframe from .zip file with json data
+author: Ange Olson
 
-data comes from http://millionsongdataset.com/lastfm/ 
-'''
+before running, have the train and/or test dataset downloaded already and unzipped
+data comes from http://millionsongdataset.com/lastfm/
+"""
 
-import os 
-import zipfile
+import os
 import json
 import pandas as pd 
 import regex as re 
 from bs4 import BeautifulSoup
 from urllib.request import Request, urlopen
-from os import listdir
-from os.path import isfile, join
+import argparse
 
-# set environment vars 
-PATH_ = os.getcwd()
-TRAIN_FILEPATH_ = PATH_ + os.sep + 'lastfm_train.zip'
-TEST_FILEPATH_ = PATH_ + os.sep + 'lastfm_test.zip'
-DATAPATH_ = PATH_ + os.sep + 'Data'
-filepath_list = [TRAIN_FILEPATH_, TEST_FILEPATH_]
+# argparse vars
+parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
+parser.add_argument("-dt_pth", "--input_path", default = 'None', type=str, help = "path to the data files")
+parser.add_argument("-ex_pth", "--export_path", default = 'None', type=str, help = "path for final dataset")
+parser.add_argument("-ex_name", "--range", default = 'None.csv', type=str, help = "name for final dataset")
+parser.add_argument("-type", "--type", default = "train", type=str, help = "type, either train or test")
+args = vars(parser.parse_args())
+
+# set environment vars
+INPUT_PATH_ = args['input_path']
+DATAPATH_ = args['export_path']
+FILENAME_ = args['ex_name']
+TYPE_ = args['type']
 
 # extract data from zip file
 # for file in filepath_list:
@@ -32,10 +38,10 @@ filepath_list = [TRAIN_FILEPATH_, TEST_FILEPATH_]
 
 def getDataframe(type='train'):
     '''
-    :param type: either trian or test split
+    :param type: either train or test split
     :return: pandas dataframe
     '''
-    filepath = DATAPATH_ + f'/lastfm_{type}'
+    filepath = INPUT_PATH_ + f'/lastfm_{type}'
     files = os.listdir(filepath)
     from itertools import product
     combos = list(product(files, files, files))
@@ -58,8 +64,6 @@ def getDataframe(type='train'):
                     if 'indie' in fields['tags']:
                         file_df = pd.DataFrame(fields, index=[0])
                         df = pd.concat([df,file_df])
-
-    #df = df[df['tags'].str.contains('indie')]
     df.reset_index(drop=True)
     return df
 
@@ -74,7 +78,7 @@ def cleanTitle(tit):
     pattern = re.compile(r'\(.*?\)') # pattern to remove parenthesis, anything in parenthesis 
     tit = re.sub(pattern, "", tit) # sub pattern
     tit = re.sub(r'\s+$', '', tit) # remove trailing whitespace
-    tit = tit.replace("'","") # remove apostrephes 
+    tit = tit.replace("'","") # remove apostrophes
     tit = "-".join(tit.split(" ")) # join each word with a dash
     return tit
 
@@ -160,5 +164,6 @@ def dataframePipeline(type='train'):
 # Run
 
 if __name__ == "__main__":
-    test_df = dataframePipeline(type='test')
-    test_df.to_csv('test_df.csv')
+    os.chdir(DATAPATH_)
+    df = dataframePipeline(type=TYPE_)
+    df.to_csv(FILENAME_)

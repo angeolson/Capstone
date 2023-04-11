@@ -25,7 +25,7 @@ df_train = df_train.rename(columns={'lyrics': 'song'})
 df_train['gen_type'] = 'None' # denotes not generated
 
 # import songs predicted by the bert base model
-df_bert = pd.read_csv('bert-lstm-gen.csv', index_col=0)
+df_bert = pd.read_csv('bert-lstm-gen_trunc_model.csv', index_col=0)
 
 # concat into one df
 df = df_train.append(df_bert)
@@ -98,13 +98,13 @@ ax = sns.histplot(
 ax.set_ylabel('Word Count')
 ax.set_xlabel('Length')
 ax.set(title='Song Length and Word Count Distribution')
-#fig.savefig('Song_Length_and_Word_Count_Distribution.png', bbox_inches='tight', dpi=200)
+fig.savefig('Song_Length_and_Word_Count_Distribution.png', bbox_inches='tight', dpi=200)
 plt.show()
 
 # 2: most common words, with and without stop words (unigrams)
 
 # with stop words
-punctuation = ['?', '!', '-', ',', '.', '(', ')', '']
+punctuation = ['?', '!', '-', ',', '.', '(', ')', '', "'", '"']
 stop_words = stopwords.words('english') + punctuation
 
 all_words_train = [item.lower() for item in df[df['gen_type'] == 'None']['tokenized_song'].explode() if item.lower() not in punctuation] # get all words
@@ -142,7 +142,7 @@ ax.set(title='20 Most Common Words')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-fig.savefig('20_Most_Common_Words.png', bbox_inches='tight', dpi=200)
+fig.savefig('20_Most_Common_Words_Comp.png', bbox_inches='tight', dpi=200)
 plt.show()
 
 
@@ -182,7 +182,7 @@ ax.set(title='20 Most Common Words (Stop Words Removed)')
 ax.set_ylabel('')
 ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
 ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-fig.savefig('20_Most_Common_Words.png', bbox_inches='tight', dpi=200)
+fig.savefig('20_Most_Common_Words_Stop_Comp.png', bbox_inches='tight', dpi=200)
 plt.show()
 
 # 3 most common bigrams
