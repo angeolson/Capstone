@@ -19,14 +19,14 @@ import argparse
 parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
 parser.add_argument("-dt_pth", "--input_path", default = 'None', type=str, help = "path to the data files")
 parser.add_argument("-ex_pth", "--export_path", default = 'None', type=str, help = "path for final dataset")
-parser.add_argument("-ex_name", "--range", default = 'None.csv', type=str, help = "name for final dataset")
+parser.add_argument("-ex_nme", "--export_name", default = 'None.csv', type=str, help = "name for final dataset")
 parser.add_argument("-type", "--type", default = "train", type=str, help = "type, either train or test")
 args = vars(parser.parse_args())
 
 # set environment vars
 INPUT_PATH_ = args['input_path']
 DATAPATH_ = args['export_path']
-FILENAME_ = args['ex_name']
+FILENAME_ = args['export_name']
 TYPE_ = args['type']
 
 # extract data from zip file
