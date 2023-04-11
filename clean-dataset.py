@@ -1,10 +1,29 @@
+"""
+last update: 4/11
+purpose: clean a dataframe of songs with delineated verses
+author: Ange Olson
+
+"""
+
 # imports
 import pandas as pd
 import regex as re
 import spacy
 from spacy.language import Language
 from spacy_langdetect import LanguageDetector
+import os
+import argparse
 # os.system('pip3 install markupsafe==2.0.1') # last compatible version of markupsafe to use with language detector
+
+# argparse vars
+parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
+parser.add_argument("-dt_pth", "--input_path", default = 'None', type=str, help = "path to the data files")
+parser.add_argument("-ex_pth", "--export_path", default = 'None', type=str, help = "path for final dataset")
+args = vars(parser.parse_args())
+
+# set environment vars
+INPUT_PATH_ = args['input_path']
+DATAPATH_ = args['export_path']
 
 # helper functions
 def cleanData(df):
@@ -167,11 +186,13 @@ Language.factory("language_detector", func=get_lang_detector)
 nlp.add_pipe('language_detector', last=True)
 
 # read in data
+os.chdir(INPUT_PATH_)
 df = pd.read_csv('data_delineated.csv')
 
 # cleaning pipeline for dataframe
+os.chdir(DATAPATH_)
 df = cleanData(df)
-print('Done!')
+print('Done cleaning!')
 df = df[df['verses_transformed'] != 'Lengths are not equal']
 df.to_csv('df_cleaned.csv')
 
