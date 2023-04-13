@@ -10,6 +10,7 @@ import string
 import random
 import time
 from typing import List
+from collections import Counter
 
 def cleanData(df):
     '''
@@ -73,14 +74,18 @@ class NgramModel(object):
         r = random.random()
         map_to_probs = {}
         token_of_interest = self.context[context]
-        for token in token_of_interest:
-            map_to_probs[token] = self.prob(context, token)
+        unique_token_of_interest = Counter(token_of_interest)
+        for token in unique_token_of_interest.keys():
+            # map_to_probs[token] = self.prob(context, token)
+            map_to_probs[token] = unique_token_of_interest[token]/len(token_of_interest)
 
-        summ = 0
-        for token in sorted(map_to_probs):
-            summ += map_to_probs[token]
-            if summ > r:
-                return token
+        token = random.choices(list(map_to_probs.keys()), list(map_to_probs.values()), k=1)
+        return token[0]
+        # summ = 0
+        # for token in sorted(map_to_probs):
+        #     summ += map_to_probs[token]
+        #     if summ > r:
+        #         return token
 
     def generate_text(self, token_count: int, start_option: str):
         """
