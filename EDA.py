@@ -191,7 +191,7 @@ def getSongRhyme(verses_transformed, level, syllable_list, option='AA'):
         max_rhymes = (len(verses) // 2) - 1
         list_ = []
         i = 2
-        while i < len(verses):
+        while i +1 < len(verses):
             #list_.append(doTheyRhyme(verses[i-2], verses[i], level=level))
             list_.append(rhymeCheck(verses[i - 2], verses[i], syllable_list, level=level))
             i += 1  # skip ahead to the next look-back lines
@@ -351,7 +351,7 @@ plt.show()
 # df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
 # df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
 
-sample_df = df.sample(n=300, random_state=SEED)
+sample_df = df.sample(n=150, random_state=SEED)
 
 sample_df['rhymescore_AA'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AA'))
 print('done with AA!')
