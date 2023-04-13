@@ -107,6 +107,14 @@ def minimum(a, b):
         return b
 
 def rhymeCheck(word1, word2, syllable_list, level=3):
+    '''
+    helper function for checking for a rhyme. Takes two words, a list of words/syllables from a word dictionary, and the level (number of syllables) that need to rhyme
+    :param word1: str
+    :param word2: str
+    :param syllable_list: list
+    :param level: int
+    :return: boolean, do the words rhyme or not
+    '''
     syllables = syllable_list
     dict_ = {}
     rhyme_dict = Convert(syllables, dict_) # create dict
@@ -170,18 +178,25 @@ def getSongRhyme(verses_transformed, level, syllable_list, option='AA'):
     '''
     verses = [item[-1] for item in versesRhymeTransform(verses_transformed)]
     if option == 'AA':
-        max_rhymes = len(verses) - 1
+        max_rhymes = len(verses) // 2
         list_ = []
-        for i in range(1, len(verses)):
+        i = 1 # init i
+        while i < len(verses):
             #list_.append(doTheyRhyme(verses[i-1], verses[i], level=level))
-            list_.append(rhymeCheck(verses[i - 1], verses[i], syllable_list, level=level))
+            list_.append(rhymeCheck(verses[i - 1], verses[i], syllable_list, level=level)) # check if the line rhymes with the preceeding
+            i += 2 # skip ahead to the next look-back lines
+
         return safeDivision(sum(list_), max_rhymes)
     else:
-        max_rhymes = (len(verses)/2) - 1
+        max_rhymes = (len(verses) // 2) - 1
         list_ = []
-        for i in range(2, len(verses)):
+        i = 2
+        while i < len(verses):
             #list_.append(doTheyRhyme(verses[i-2], verses[i], level=level))
             list_.append(rhymeCheck(verses[i - 2], verses[i], syllable_list, level=level))
+            i += 1  # skip ahead to the next look-back lines
+            list_.append(rhymeCheck(verses[i - 2], verses[i], syllable_list, level=level))
+            i += 3 # skip ahead to the next look-back lines
         return safeDivision(sum(list_), max_rhymes)
 
 def split_list(input_list,seperator):
@@ -277,7 +292,7 @@ top_words = Counter([item.lower() for item in df['EDA_verses'].explode() if item
 x = [item[0] for item in top_words.most_common(20)]
 y = [item[1] for item in top_words.most_common(20)]
 fig = plt.figure()
-ax = sns.barplot(x=x, y=y)
+ax = sns.barplot(x=x, y=y, color='blue')
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='20 Most Common Words')
 ax.set_ylabel('')
@@ -292,7 +307,7 @@ top_words_rem = Counter([item.lower() for item in df['EDA_verses'].explode() if 
 x = [item[0] for item in top_words_rem.most_common(20)]
 y = [item[1] for item in top_words_rem.most_common(20)]
 fig = plt.figure()
-ax = sns.barplot(x=x, y=y)
+ax = sns.barplot(x=x, y=y, color='blue')
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='20 Most Common Words (Stopwords Removed)')
 ax.set_ylabel('')
@@ -309,7 +324,7 @@ y = []
 for word, freq in bigrams:
     x.append(word), y.append(freq)
 fig = plt.figure()
-ax = sns.barplot(x=x, y=y)
+ax = sns.barplot(x=x, y=y, color='blue')
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='20 Most Common Bigrams')
 ax.set_ylabel('')
