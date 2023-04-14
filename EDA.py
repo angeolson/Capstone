@@ -2,7 +2,7 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-sns.set_theme(style="whitegrid")
+sns.set_theme()
 from collections import Counter
 import regex as re
 import nltk
@@ -240,7 +240,7 @@ x = [item.capitalize() for item in df['verse_types'].explode().value_counts().in
 y = df['verse_types'].explode().value_counts()
 
 fig = plt.figure()
-ax = sns.barplot(x=x, y=y)
+ax = sns.barplot(x=x, y=y, color='blue')
 sns.set(rc={"figure.figsize":(6, 7)})
 ax.set(title='Song Component Occurences')
 ax.set_ylabel('')
