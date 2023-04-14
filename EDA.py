@@ -13,6 +13,21 @@ from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
 import os
 import random
+import argparse
+
+# argparse vars
+parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
+parser.add_argument("-dt_pth", "--data_path", default = 'None', type=str, help = "path to the data files")
+parser.add_argument("-ex_pth", "--export_path", default = 'None', type=str, help = "path for exported plots")
+args = vars(parser.parse_args())
+
+# set environment vars and get dict, syllable list
+DATAPATH = args['input_path']
+IMGPATH= args['export_path']
+entries = cmudict.entries()
+syllable_list = [(word, syl) for word, syl in entries]
+SEED = 48
+random.seed(SEED)
 
 # helper functions
 def cleanData(df):
@@ -220,165 +235,162 @@ def split_list(input_list,seperator):
     return outer
 
 # vars
-DATAPATH = '/home/ubuntu/Capstone/'
-IMGPATH = '/home/ubuntu/Capstone/Plots'
-entries = cmudict.entries()
-syllable_list = [(word, syl) for word, syl in entries]
-SEED = 48
-random.seed(48)
-
-# clean df
-os.chdir(DATAPATH)
-df = pd.read_csv('df_cleaned.csv', index_col=0)
-df = cleanData(df)
-df.reset_index(drop=True, inplace=True)
-os.chdir(IMGPATH)
-# create stats:
-
-# 1: verse type counts
-x = [item.capitalize() for item in df['verse_types'].explode().value_counts().index]
-y = df['verse_types'].explode().value_counts()
-
-fig = plt.figure()
-ax = sns.barplot(x=x, y=y, color='blue')
-sns.set(rc={"figure.figsize":(6, 7)})
-ax.set(title='Song Component Occurences')
-ax.set_ylabel('')
-ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right")
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-fig.savefig('Song_Component_Occurences.jpg', bbox_inches='tight', dpi=150)
-plt.show()
-
-# 2: word count histogram
-df['word_count'] = df['EDA_verses'].apply(wordCount)
-fig = plt.figure()
-ax = sns.histplot(data=df, x='word_count')
-ax.set_ylabel('')
-ax.set_xlabel('Word Count')
-ax.set(title='Song Unique Word Count Distribution')
-fig.savefig('Song_Unique_Word_Count_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
-
-# 3: length histogram
-df['length'] = df['EDA_verses'].apply(lambda x:len(x))
-fig = plt.figure()
-ax = sns.histplot(data=df, x='length', kde=False)
-ax.set_ylabel('')
-ax.set_xlabel('Length')
-ax.set(title='Song Length Distribution')
-fig.savefig('Song_Length_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
-
-# 4: for fun, both plotted together as a scatter histogram
-fig = plt.figure()
-ax = sns.histplot(
-    df, x="length", y="word_count",
-    bins=50, discrete=(False, False), log_scale=(False, False),
-    cbar=True, cbar_kws=dict(shrink=.75)
-)
-ax.set_ylabel('Word Count')
-ax.set_xlabel('Length')
-ax.set(title='Song Length and Word Count Distribution')
-fig.savefig('Song_Length_and_Word_Count_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
-
-# 5: most common words, with and without stop words (unigrams)
-punctuation = ['?', '!', '-', ',', '.', '(', ')', '']
-stop_words = stopwords.words('english') + punctuation
-
-# with stop words
-top_words = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in punctuation])
-
-x = [item[0] for item in top_words.most_common(20)]
-y = [item[1] for item in top_words.most_common(20)]
-fig = plt.figure()
-ax = sns.barplot(x=x, y=y, color='blue')
-sns.set(rc={"figure.figsize":(6, 7)})
-ax.set(title='20 Most Common Words')
-ax.set_ylabel('')
-ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-fig.savefig('20_Most_Common_Words.jpg', bbox_inches='tight', dpi=150)
-plt.show()
 
 
-# without stop words
-top_words_rem = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in stop_words])
-x = [item[0] for item in top_words_rem.most_common(20)]
-y = [item[1] for item in top_words_rem.most_common(20)]
-fig = plt.figure()
-ax = sns.barplot(x=x, y=y, color='blue')
-sns.set(rc={"figure.figsize":(6, 7)})
-ax.set(title='20 Most Common Words (Stopwords Removed)')
-ax.set_ylabel('')
-ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-fig.savefig('20_Most_Common_Words_No_Stopwords.jpg', bbox_inches='tight', dpi=150)
-plt.show()
+
+if __name__ == "__main__":
+    # clean df
+    os.chdir(DATAPATH)
+    df = pd.read_csv('df_cleaned.csv', index_col=0)
+    df = cleanData(df)
+    df.reset_index(drop=True, inplace=True)
+    os.chdir(IMGPATH)
+    # create stats:
+
+    # 1: verse type counts
+    x = [item.capitalize() for item in df['verse_types'].explode().value_counts().index]
+    y = df['verse_types'].explode().value_counts()
+
+    fig = plt.figure()
+    ax = sns.barplot(x=x, y=y, color='blue')
+    sns.set(rc={"figure.figsize":(6, 7)})
+    ax.set(title='Song Component Occurences')
+    ax.set_ylabel('')
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=40, ha="right")
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+    fig.savefig('Song_Component_Occurences.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
+
+    # 2: word count histogram
+    df['word_count'] = df['EDA_verses'].apply(wordCount)
+    fig = plt.figure()
+    ax = sns.histplot(data=df, x='word_count')
+    ax.set_ylabel('')
+    ax.set_xlabel('Word Count')
+    ax.set(title='Song Unique Word Count Distribution')
+    fig.savefig('Song_Unique_Word_Count_Distribution.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
+
+    # 3: length histogram
+    df['length'] = df['EDA_verses'].apply(lambda x:len(x))
+    fig = plt.figure()
+    ax = sns.histplot(data=df, x='length', kde=False)
+    ax.set_ylabel('')
+    ax.set_xlabel('Length')
+    ax.set(title='Song Length Distribution')
+    fig.savefig('Song_Length_Distribution.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
+
+    # 4: for fun, both plotted together as a scatter histogram
+    fig = plt.figure()
+    ax = sns.histplot(
+        df, x="length", y="word_count",
+        bins=50, discrete=(False, False), log_scale=(False, False),
+        cbar=True, cbar_kws=dict(shrink=.75)
+    )
+    ax.set_ylabel('Word Count')
+    ax.set_xlabel('Length')
+    ax.set(title='Song Length and Word Count Distribution')
+    fig.savefig('Song_Length_and_Word_Count_Distribution.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
+
+    # 5: most common words, with and without stop words (unigrams)
+    punctuation = ['?', '!', '-', ',', '.', '(', ')', '']
+    stop_words = stopwords.words('english') + punctuation
+
+    # with stop words
+    top_words = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in punctuation])
+
+    x = [item[0] for item in top_words.most_common(20)]
+    y = [item[1] for item in top_words.most_common(20)]
+    fig = plt.figure()
+    ax = sns.barplot(x=x, y=y, color='blue')
+    sns.set(rc={"figure.figsize":(6, 7)})
+    ax.set(title='20 Most Common Words')
+    ax.set_ylabel('')
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+    fig.savefig('20_Most_Common_Words.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
 
 
-#7: bigrams
-bigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 2)
-x = []
-y = []
-for word, freq in bigrams:
-    x.append(word), y.append(freq)
-fig = plt.figure()
-ax = sns.barplot(x=x, y=y, color='blue')
-sns.set(rc={"figure.figsize":(6, 7)})
-ax.set(title='20 Most Common Bigrams')
-ax.set_ylabel('')
-ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-fig.savefig('20_Most_Common_Bigrams.jpg', bbox_inches='tight', dpi=150)
-plt.show()
+    # without stop words
+    top_words_rem = Counter([item.lower() for item in df['EDA_verses'].explode() if item.lower() not in stop_words])
+    x = [item[0] for item in top_words_rem.most_common(20)]
+    y = [item[1] for item in top_words_rem.most_common(20)]
+    fig = plt.figure()
+    ax = sns.barplot(x=x, y=y, color='blue')
+    sns.set(rc={"figure.figsize":(6, 7)})
+    ax.set(title='20 Most Common Words (Stopwords Removed)')
+    ax.set_ylabel('')
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+    fig.savefig('20_Most_Common_Words_No_Stopwords.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
 
-#8: trigrams
-# trigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 3)
-# x = []
-# y = []
-# for word, freq in trigrams:
-#     x.append(word), y.append(freq)
-# ax = sns.barplot(x=x, y=y)
-# sns.set(rc={"figure.figsize":(6, 7)})
-# ax.set(title='20 Most Common Trigrams')
-# ax.set_ylabel('')
-# ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
-# ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
-# plt.show()
 
-#9: rhyme distribution
-# df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
-# df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
+    #7: bigrams
+    bigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 2)
+    x = []
+    y = []
+    for word, freq in bigrams:
+        x.append(word), y.append(freq)
+    fig = plt.figure()
+    ax = sns.barplot(x=x, y=y, color='blue')
+    sns.set(rc={"figure.figsize":(6, 7)})
+    ax.set(title='20 Most Common Bigrams')
+    ax.set_ylabel('')
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+    fig.savefig('20_Most_Common_Bigrams.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
 
-sample_df = df.sample(n=150, random_state=SEED)
+    #8: trigrams
+    # trigrams = get_top_n_ngram(df['EDA_verses'].explode(), 20, 3)
+    # x = []
+    # y = []
+    # for word, freq in trigrams:
+    #     x.append(word), y.append(freq)
+    # ax = sns.barplot(x=x, y=y)
+    # sns.set(rc={"figure.figsize":(6, 7)})
+    # ax.set(title='20 Most Common Trigrams')
+    # ax.set_ylabel('')
+    # ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="right")
+    # ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
+    # plt.show()
 
-sample_df['rhymescore_AA'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AA'))
-print('done with AA!')
-sample_df['rhymescore_AB'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AB'))
-print('done with AB!')
+    #9: rhyme distribution
+    # df['rhymescore_AA'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AA'))
+    # df['rhymescore_AB'] = df['verses_transformed'].apply(getSongRhyme, args=(2, 'AB'))
 
-# export df
-os.chdir(DATAPATH)
-df.to_csv('df_EDA.csv')
-sample_df.to_csv('rhyme_sample.csv')
-print('exported')
-print('done')
+    sample_df = df.sample(n=150, random_state=SEED)
 
-os.chdir(IMGPATH)
-fig = plt.figure()
-ax = sns.histplot(data=sample_df, x='rhymescore_AA', kde=True)
-ax.set_ylabel('')
-ax.set_xlabel('Score')
-ax.set(title='Song AA Rhyme Score Distribution')
-fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
+    sample_df['rhymescore_AA'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AA'))
+    print('done with AA!')
+    sample_df['rhymescore_AB'] = sample_df['verses_transformed'].apply(getSongRhyme, args=(2, syllable_list, 'AB'))
+    print('done with AB!')
 
-fig = plt.figure()
-ax = sns.histplot(data=sample_df, x='rhymescore_AB', kde=True)
-ax.set_ylabel('')
-ax.set_xlabel('Score')
-ax.set(title='Song AB Rhyme Score Distribution')
-fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
-plt.show()
+    # export df
+    os.chdir(DATAPATH)
+    df.to_csv('df_EDA.csv')
+    sample_df.to_csv('rhyme_sample.csv')
+    print('exported')
+    print('done')
+
+    os.chdir(IMGPATH)
+    fig = plt.figure()
+    ax = sns.histplot(data=sample_df, x='rhymescore_AA', kde=True)
+    ax.set_ylabel('')
+    ax.set_xlabel('Score')
+    ax.set(title='Song AA Rhyme Score Distribution')
+    fig.savefig('Song_AA_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
+
+    fig = plt.figure()
+    ax = sns.histplot(data=sample_df, x='rhymescore_AB', kde=True)
+    ax.set_ylabel('')
+    ax.set_xlabel('Score')
+    ax.set(title='Song AB Rhyme Score Distribution')
+    fig.savefig('Song_AB_Rhyme_Score_Distribution.jpg', bbox_inches='tight', dpi=150)
+    plt.show()
 
