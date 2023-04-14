@@ -12,10 +12,11 @@ from nltk.corpus import stopwords
 from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
 import os
+from scipy.stats import ttest_ind
 import random
 
 # set
-sns.set_theme(style="whitegrid")
+sns.set_theme()
 IMGPATH = '/home/ubuntu/Capstone/Final_Plots'
 
 # import training dataset of real songs
@@ -33,7 +34,7 @@ df.reset_index(drop=True, inplace=True)
 
 def helper1(row):
     row = str(row)
-    remove_items = ['<SONGBREAK>', '[SEP]', '[BOS]', '[EOS]', '<newline>']
+    remove_items = ['<SONGBREAK>', '[SEP]', '[BOS]', '[EOS]', '<newline>', ' ##']
     for item in remove_items:
         row = row.replace(item, '')
     return row
@@ -53,6 +54,16 @@ def wordCount(verses):
     verse_words = len(verse_counter)
     return verse_words
 
+def lineCount(verses):
+    '''
+    line count for a song
+    :param verses: single phrase verses, not stripped
+    :return: count of lines in a song
+    '''
+    newline_count = verses.count('<newline>')
+    sep_count = verses.count('[SEP]')
+    return max(newline_count, sep_count)
+
 def CleanData(df):
     '''
     # define function to clean the data
@@ -65,9 +76,14 @@ def CleanData(df):
     '''
     df['stripped_song'] = df['song'].apply(helper1)
     df['EOS_count'] = df['song'].apply(helper2)
+    df['lineCount'] = df['song'].apply(lineCount)
+    df['verseCount'] = df['song'].apply(lambda x:x.count('<SONGBREAK>'))
     df['tokenized_song'] = df['stripped_song'].apply(lambda x:x.split())
     df['song_length'] = df['tokenized_song'].apply(lambda x:len(x))
     df['word_count'] = df['tokenized_song'].apply(wordCount)
+    df['norm_word_count'] = df['word_count']/df['song_length']
+    df['norm_lineCount'] = df['lineCount']/df['song_length']
+    df['norm_verseCount'] = df['verseCount']/df['song_length']
     return df
 
 def get_top_n_ngram(corpus, n=None, ngram=1):
@@ -132,7 +148,7 @@ bert_top_20['freq'] = bert_y
 
 merged_top_20 = pd.merge(train_top_20, bert_top_20, on='words', how='outer', )
 merged_top_20.fillna(value=0, inplace=True)
-df_train = df_train.rename(columns={'freq_x': 'None', 'freq_y': 'lstm-bert'})
+merged_top_20 = merged_top_20.rename(columns={'freq_x': 'None', 'freq_y': 'lstm-bert'})
 merged_melt = merged_top_20.melt('words', var_name='cols', value_name='vals')
 
 fig = plt.figure()
@@ -213,3 +229,48 @@ plt.show()
 # ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
 # fig.savefig('20_Most_Common_Bigrams.png', bbox_inches='tight', dpi=200)
 # plt.show()
+
+# 3: Line count histogram
+fig = plt.figure()
+ax = sns.kdeplot(data=df, x='norm_lineCount', hue='gen_type', common_norm=False)
+ax.set_ylabel('')
+ax.set_xlabel('Line Count')
+ax.set(title='Song Line Count Distribution')
+fig.savefig('Song_lineCount_dist.png', bbox_inches='tight', dpi=200)
+plt.show()
+
+# 4: Verse count histogram
+fig = plt.figure()
+ax = sns.kdeplot(data=df, x='norm_verseCount', hue='gen_type', common_norm=False)
+ax.set_ylabel('')
+ax.set_xlabel('Verse Count')
+ax.set(title='Song Verse Count Distribution')
+fig.savefig('Song_verseCount_dist.png', bbox_inches='tight', dpi=200)
+plt.show()
+
+# 5: Word count histogram
+fig = plt.figure()
+ax = sns.kdeplot(data=df, x='norm_word_count', hue='gen_type', common_norm=False)
+ax.set_ylabel('')
+ax.set_xlabel('Word Count')
+ax.set(title='Song Word Count Distribution')
+fig.savefig('Song_wordCount_dist.png', bbox_inches='tight', dpi=200)
+plt.show()
+
+
+def ttest(metric):
+    # define samples
+    group1 = df[df['gen_type'] == 'None']
+    group2 = df[df['gen_type'] == 'lstm-bert']
+
+    # perform Welch's t-test
+    return ttest_ind(group1[metric], group2[metric], equal_var=False)
+
+# 5: Unique word count t test
+print(ttest('norm_word_count'))
+
+# 6: line count t test
+print(ttest('norm_lineCount'))
+
+# 7: verse count t test
+print(ttest('norm_verseCount'))
