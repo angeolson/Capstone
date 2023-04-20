@@ -1,19 +1,13 @@
 # imports
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
-import regex as re
-import nltk
-#nltk.download('stopwords')
-#nltk.download('cmudict')
 from nltk.corpus import stopwords
-from nltk.corpus import cmudict
 from sklearn.feature_extraction.text import CountVectorizer
 import os
 from scipy.stats import ttest_ind
-import random
+
 
 # set
 sns.set_theme()
