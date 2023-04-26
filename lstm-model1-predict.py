@@ -143,4 +143,4 @@ model = Model(uniq_words=uniq_words, max_len=MAX_LEN, single_token_output=single
 model.load_state_dict(torch.load(save_model, map_location=device))
 
 #------------MODEL RUN-----------------
-print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text="i have been walking in my shadows <newline> where i am walking to i do not know", next_words=250, single_token_output=single_token_output))
+print(predict(word_to_index=word_to_index, index_to_word=index_to_word, model=model, text="you", next_words=250, single_token_output=single_token_output))

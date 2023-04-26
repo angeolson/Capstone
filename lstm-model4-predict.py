@@ -142,5 +142,5 @@ model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=ber
 model.load_state_dict(torch.load(model_name, map_location=device))
 
 #------------MODEL RUN-----------------
-song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] darkness", entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer, temperature = 1)
+song = generate(model=model, prompt="[BOS] <SONGBREAK> [SEP] you", entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer, temperature = 1)
 print(song)
