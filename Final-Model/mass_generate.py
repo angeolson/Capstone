@@ -7,6 +7,7 @@ import numpy as np
 from model import Model
 import os
 import argparse
+import pandas as pd
 
 # set vars
 SEED = 48
@@ -16,18 +17,26 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
 parser.add_argument("-m_pth", "--model_path", default = 'None', type=str, help = "path to the model file", required=True)
 parser.add_argument("-m", "--model", default = 'model-4-hs128-2fc-vocab_trunc.pt', type=str, help = "name of model to use in generation", required=True)
+parser.add_argument("-ex", "--export_file", default = 'bert-lstm-gen_trunc_model.csv', type=str, help = "name of file to export songs to", required=True)
+parser.add_argument("-ex_pth", "--export_path", default = 'None', type=str, help = "path to export songs to", required=True)
 parser.add_argument("-sing", "--single_token", default = False, type=bool, help = "True if only want to look at last word logits", required=True)
-parser.add_argument("-mlen", "--max_len", default = 250, type=int, help = "max length to truncate songs", required=True)
-parser.add_argument("-t", "--temp", default = 1, type=int, help = "temperature: recommend selecting between 0.8 and 1", required=True)
-parser.add_argument("-p", "--prompt", default = 'None', type=str, help = "single word prompter", required=True)
+parser.add_argument("-mlen", "--low_max_len", default = 250, type=int, help = "low bound max length to truncate songs", required=True)
+parser.add_argument("-hmlen", "--high_max_len", default = 350, type=int, help = "high bound max length to truncate songs", required=True)
+parser.add_argument("-lt", "--low_temp", default = 0.9, type=float, help = "temperature low: recommend selecting between 0.9 and 1.1", required=True)
+parser.add_argument("-ht", "--high_temp", default = 1, type=float, help = "temperature high: recommend selecting between 0.9 and 1.1", required=True)
+parser.add_argument("-p", "--prompt_list", default = ['darkness', 'love', 'i', 'you', 'help', 'what', 'have', 'in', 'once', 'who', 'tomorrow', 'today', 'let'],  nargs='+', help = "list of prompt words", required=True)
 args = vars(parser.parse_args())
 
-MAX_LEN = args['max_len']
+MAX_LEN = args['low_max_len']
+HIGH_MAX_LEN = args['high_max_len']
 MODEL_PATH = args['model_path']
 single_token_output = args['single_token']
 model_name = args['model']
-temperature_ = args['temp']
-prompt_ = "[BOS] <SONGBREAK> [SEP] " + args['prompt']
+low_temperature_ = args['low_temp']
+high_temperature = args['high_temp']
+prompt_list = args['prompt_list']
+export_file = args['export_file']
+EXPORT_PATH = args['export_path']
 
 # -----------GENERATE FUNCTION------------
 def generate(
@@ -110,26 +119,38 @@ def generate(
     return " ".join([item for item in generated_lyrics if item != '[PAD]'])
 
 #---------LOAD MODEL--------------------
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-bert = BertModel.from_pretrained("bert-base-uncased")
-#freeze the pretrained layers
-for param in bert.parameters():
-    param.requires_grad = False
+if __name__ == '__main__':
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    bert = BertModel.from_pretrained("bert-base-uncased")
+    #freeze the pretrained layers
+    for param in bert.parameters():
+        param.requires_grad = False
 
-# add new tokens to tokenizer
-new_tokens = ['<SONGBREAK>', '[BOS]', '[EOS]']
-tokenizer.add_special_tokens({'additional_special_tokens': new_tokens})  # add tokens for verses
-bert.resize_token_embeddings(len(tokenizer))  # resize embeddings for added special tokens
-unk_tok_emb = bert.embeddings.word_embeddings.weight.data[tokenizer.unk_token_id, :]  # get embedding for unknown token
-for i in range(len(new_tokens)):  # initially apply that to all new tokens
-    bert.embeddings.word_embeddings.weight.data[-(i + 1), :] = unk_tok_emb
+    # add new tokens to tokenizer
+    new_tokens = ['<SONGBREAK>', '[BOS]', '[EOS]']
+    tokenizer.add_special_tokens({'additional_special_tokens': new_tokens})  # add tokens for verses
+    bert.resize_token_embeddings(len(tokenizer))  # resize embeddings for added special tokens
+    unk_tok_emb = bert.embeddings.word_embeddings.weight.data[tokenizer.unk_token_id, :]  # get embedding for unknown token
+    for i in range(len(new_tokens)):  # initially apply that to all new tokens
+        bert.embeddings.word_embeddings.weight.data[-(i + 1), :] = unk_tok_emb
 
-model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
-    device)
+    model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
+        device)
 
-os.chdir(MODEL_PATH)
-model.load_state_dict(torch.load(model_name, map_location=device))
+    os.chdir(MODEL_PATH)
+    model.load_state_dict(torch.load(model_name, map_location=device))
 
-#------------MODEL RUN-----------------
-song = generate(model=model, prompt=prompt_, entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer, temperature = temperature_)
-print(song)
+    #------------MODEL RUN-----------------
+    song_list = [ ]
+    for i in range(100):
+        prompt = random.choice(prompt_list)
+        temp = np.random.uniform(low=low_temperature_, high=high_temperature, size=None)
+        entry_length = np.random.randint(MAX_LEN, high=HIGH_MAX_LEN, size=None, dtype=int)
+        song = generate(model=model, prompt=f"[BOS] <SONGBREAK> [SEP] {prompt}", entry_length=entry_length, single_token_output=single_token_output, tokenizer=tokenizer, temperature = temp)
+        song_list.append(song)
+
+    os.chdir(EXPORT_PATH)
+    generated_songs = pd.DataFrame()
+    generated_songs['song'] = song_list
+    generated_songs['gen_type'] = 'lstm-bert'
+    generated_songs.to_csv(export_file  )

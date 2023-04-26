@@ -1,69 +1,35 @@
-# temp calc from https://github.com/klaudia-nazarko/nlg-text-generation/blob/main/LSTM_class.py
-import pandas as pd
 # imports
 import torch
-from torch import nn
 import random
 import torch.nn.functional as F
-from transformers import BertTokenizer, BertModel, BertConfig
+from transformers import BertTokenizer, BertModel
 import numpy as np
+from model import Model
+import os
+import argparse
 
+# set vars
 SEED = 48
 random.seed(48)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-MAX_LEN = 250
-Iterative_Train = False  # False if training model from scratch, True if fine-tuning
-single_token_output = False  # True if only want to look at last word logits
-model_name = 'model-4-hs128-2fc-vocab_trunc.pt'
 
-# --------CLASS DEFINITIONS-------------
-class Model(nn.Module):
-    def __init__(self, max_len, bert, hidden_dim, no_layers, single_token_output=True):
-        super(Model, self).__init__()
-        self.bert = bert
-        self.hidden_dim = hidden_dim
-        self.embedding_dim = bert.config.to_dict()['hidden_size']
-        self.num_layers = no_layers
-        self.n_vocab = bert.config.to_dict()['vocab_size']
-        self.max_len = max_len
-        self.lstm = nn.LSTM(
-            input_size=self.embedding_dim,
-            hidden_size=self.hidden_dim,
-            num_layers=self.num_layers,
-            batch_first=True,
-            dropout=0.2,
-        )
-        # self.fc = nn.Linear(self.hidden_dim, self.n_vocab)
-        # self.dropout = nn.Dropout(0.2)
-        self.fc1 = nn.Linear(self.hidden_dim, 256)
-        self.fc2 = nn.Linear(256, self.n_vocab)
-        # self.fc2 = nn.Linear(256, 512)
-        # self.fc3 = nn.Linear(512, self.n_vocab)
-        self.single_token_output = single_token_output
-        self.act = nn.ReLU()
+parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
+parser.add_argument("-m_pth", "--model_path", default = 'None', type=str, help = "path to the model file", required=True)
+parser.add_argument("-m", "--model", default = 'model-4-hs128-2fc-vocab_trunc.pt', type=str, help = "name of model to use in generation", required=True)
+parser.add_argument("-sing", "--single_token", default = False, type=bool, help = "True if only want to look at last word logits", required=True)
+parser.add_argument("-mlen", "--max_len", default = 250, type=int, help = "max length to truncate songs", required=True)
+parser.add_argument("-t", "--temp", default = 1, type=float, help = "temperature: recommend selecting between 0.9 and 1.1", required=True)
+parser.add_argument("-p", "--prompt", default = 'None', type=str, help = "single word prompter", required=True)
+args = vars(parser.parse_args())
 
-    def forward(self, x, hidden, x_attention):
-        embed = self.bert(input_ids=x, attention_mask=x_attention)[0]
-        output, hidden = self.lstm(embed, hidden)
-        out = self.fc1(output)
-        out = self.fc2(out)
-        # out = self.fc(output)
-        # out = self.act(self.fc1(output))
-        # out = self.act(self.fc2(out))
-        # out = self.fc3(out)
-        if self.single_token_output is True:
-            out = out[:, -1, :]  # keeps only last logits, i.e. logits associated with the last word we want to predict
-        # out = self.softmax(out)
-        return out, hidden
+MAX_LEN = args['max_len']
+MODEL_PATH = args['model_path']
+single_token_output = args['single_token']
+model_name = args['model']
+temperature_ = args['temp']
+prompt_ = "[BOS] <SONGBREAK> [SEP] " + args['prompt']
 
-    def init_hidden(self, batch_size):
-        h0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
-        c0 = torch.zeros((self.num_layers, batch_size, self.hidden_dim)).to(device)
-        return h0, c0
-
-
-
-# -----------HELPER FUNCTIONS------------
+# -----------GENERATE FUNCTION------------
 def generate(
         model,
         tokenizer,
@@ -73,6 +39,17 @@ def generate(
         temperature=1.0
 
 ):
+    '''
+    temperature calc adapted from https://github.com/klaudia-nazarko/nlg-text-generation/blob/main/LSTM_class.py
+    :param model:
+    :param tokenizer:
+    :param prompt:
+    :param single_token_output:
+    :param entry_length:
+    :param temperature:
+    :return:
+    '''
+
     model.eval()
 
     generated_lyrics = prompt.split(' ')
@@ -133,13 +110,8 @@ def generate(
     return " ".join([item for item in generated_lyrics if item != '[PAD]'])
 
 #---------LOAD MODEL--------------------
-# tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-# bert = BertModel.from_pretrained("bert-base-uncased")
-
-configuration = BertConfig(vocab_size=25000)
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-bert = BertModel(config=configuration).from_pretrained("bert-base-uncased")
-
+bert = BertModel.from_pretrained("bert-base-uncased")
 #freeze the pretrained layers
 for param in bert.parameters():
     param.requires_grad = False
@@ -155,20 +127,9 @@ for i in range(len(new_tokens)):  # initially apply that to all new tokens
 model = Model(max_len=MAX_LEN, single_token_output=single_token_output, bert=bert, hidden_dim=128, no_layers=4).to(
     device)
 
+os.chdir(MODEL_PATH)
 model.load_state_dict(torch.load(model_name, map_location=device))
 
 #------------MODEL RUN-----------------
-list_of_words = ['darkness', 'love', 'i', 'you', 'help', 'what', 'have', 'in', 'once', 'who', 'tomorrow', 'today', 'let']
-
-song_list = [ ]
-for i in range(100):
-    prompt = random.choice(list_of_words)
-    temp = np.random.uniform(low=0.9, high=1.1, size=None)
-    entry_length = np.random.randint(240, high=350, size=None, dtype=int)
-    song = generate(model=model, prompt=f"[BOS] <SONGBREAK> [SEP] {prompt}", entry_length=entry_length, single_token_output=single_token_output, tokenizer=tokenizer, temperature = temp)
-    song_list.append(song)
-
-generated_songs = pd.DataFrame()
-generated_songs['song'] = song_list
-generated_songs['gen_type'] = 'lstm-bert'
-generated_songs.to_csv('bert-lstm-gen_trunc_model.csv')
+song = generate(model=model, prompt=prompt_, entry_length=MAX_LEN, single_token_output=single_token_output, tokenizer=tokenizer, temperature = temperature_)
+print(song)
