@@ -21,6 +21,9 @@ The files have the following arguments, described below. For more detail (data t
 * "-type": type, either train or test, required 
 
 **create-dataset.py**
+* "-dt_pth": path to the data files, required
+* "-ex_pth": path for final dataset, required
+* "-f": files to read in, list or singular, required 
 
 **lstm-dataprep.py**
 
