@@ -1,6 +1,14 @@
 # imports
 import pandas as pd
 import regex as re
+import argparse
+import os
+
+# argparse vars
+parser = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter)
+parser.add_argument("-dt_pth", "--input_path", default = 'None', type=str, help = "path to the data files", required=True)
+parser.add_argument("-ex_pth", "--export_path", default = 'None', type=str, help = "path for final dataset", required=True)
+args = vars(parser.parse_args())
 
 def cleanData(df):
     '''
@@ -73,7 +81,7 @@ def replace_fromdict(text, dict, re_):
 
     return re_.sub(replace, text)
 
-
+os.chdir(args['input_path'])
 df = pd.read_csv('df_EDA.csv', index_col=0)
 df = cleanData(df)
 df.reset_index(drop=True, inplace=True)
@@ -87,6 +95,7 @@ def cleanVerses(verses):
     lyrics= replace_fromdict(lyrics, songbreaks, songbreaks_re)
     return lyrics
 
+os.chdir(args['output_path'])
 df['lyrics'] = df['verses_transformed'].apply(cleanVerses)
 df.to_csv('df_LSTM.csv')
 
