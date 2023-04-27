@@ -30,5 +30,6 @@ The files have the following arguments, described below. For more detail (data t
 * "-ex_pth": path for final dataset, required
 
 **split-data.py**
-
+* "-dt_pth": path to the data files, required
+* "-ex_pth": path for final dataset, required
 
