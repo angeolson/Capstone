@@ -26,6 +26,8 @@ The files have the following arguments, described below. For more detail (data t
 * "-f": files to read in, list or singular, required 
 
 **lstm-dataprep.py**
+* "-dt_pth": path to the data files, required
+* "-ex_pth": path for final dataset, required
 
 **split-data.py**
 
