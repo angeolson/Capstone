@@ -25,6 +25,7 @@ parser.add_argument("-hmlen", "--high_max_len", default = 350, type=int, help = 
 parser.add_argument("-lt", "--low_temp", default = 0.9, type=float, help = "temperature low: recommend selecting between 0.9 and 1.1", required=True)
 parser.add_argument("-ht", "--high_temp", default = 1, type=float, help = "temperature high: recommend selecting between 0.9 and 1.1", required=True)
 parser.add_argument("-p", "--prompt_list", default = ['darkness', 'love', 'i', 'you', 'help', 'what', 'have', 'in', 'once', 'who', 'tomorrow', 'today', 'let'],  nargs='+', help = "list of prompt words", required=True)
+parser.add_argument("-r", "--range", default = 100, type=int, help = "how many songs to generate", required=True)
 args = vars(parser.parse_args())
 
 MAX_LEN = args['low_max_len']
@@ -37,6 +38,7 @@ high_temperature = args['high_temp']
 prompt_list = args['prompt_list']
 export_file = args['export_file']
 EXPORT_PATH = args['export_path']
+RANGE = args['range']
 
 # -----------GENERATE FUNCTION------------
 def generate(
@@ -142,7 +144,7 @@ if __name__ == '__main__':
 
     #------------MODEL RUN-----------------
     song_list = [ ]
-    for i in range(100):
+    for i in range(RANGE):
         prompt = random.choice(prompt_list)
         temp = np.random.uniform(low=low_temperature_, high=high_temperature, size=None)
         entry_length = np.random.randint(MAX_LEN, high=HIGH_MAX_LEN, size=None, dtype=int)
