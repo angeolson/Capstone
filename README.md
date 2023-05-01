@@ -3,7 +3,7 @@ This repository contains project files associated with my George Washington Univ
 
 My project is on Natural Language Generation (NLG), specifically song lyric generation in the "indie" style of music. My final paper and presentation are located in the **Presentation-Materials** folder.
 
-Most relevant files (the final model I used to generate and evaluate songs, preprocessing files) are in the **Final-Model** and **Dataset-Preprocess** folders. To recreate the results of my project, please start with data preprocessing, and then run the training file in **Final-Model** before running either generation file. To generate songs only, please download the model from google here:
+Most relevant files (the final model I used to generate and evaluate songs, preprocessing files) are in the **Final-Model** and **Dataset-Preprocess** folders. To recreate the results of my project, please start with data preprocessing, and then run the training file in **Final-Model** before running either generation file. To generate songs only, please download the model from google [here](https://drive.google.com/file/d/1VwI-Er9Ucf8e-1lye1WZLpK0sVlqSvEt/view?usp=sharing).
 
 Then you may proceed to run either the mass_generate.py or generate.py file to generate many or a single song, respectively. 
 
