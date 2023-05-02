@@ -1,5 +1,5 @@
 # Capstone
-This repository contains project files associated with my George Washington Univeristy MS in Data Science Captstone. 
+This repository contains project files associated with my George Washington Univeristy MS in Data Science Capstone. 
 
 My project is on Natural Language Generation (NLG), specifically song lyric generation in the "indie" style of music. My final paper and presentation are located in the **Presentation-Materials** folder.
 
